@@ -1,0 +1,8 @@
+# Paquete ml/ (job nocturno score.py). Versiones iguales a las del venv de referencia de ciencia de datos
+# (Python 3.11): la prueba de paridad depende de ellas, sobre todo LightGBM, scikit-learn (TF-IDF, SVD) y numpy.
+numpy==2.4.6
+pandas==2.3.3
+pyarrow==26.0.1
+scipy==1.17.1
+scikit-learn==1.9.1
+lightgbm==4.7.0
