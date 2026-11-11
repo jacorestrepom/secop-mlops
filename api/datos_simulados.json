@@ -1,0 +1,1668 @@
+{
+ "fecha_corte": "2026-11-10",
+ "ultima_publicacion": "2026-11-10T05:12:00-05:00",
+ "version_modelos": {
+  "retrieval": "secop-retrieval v1",
+  "pgana": "secop-pgana v1",
+  "ranking": "secop-ranking v1"
+ },
+ "empresas": [
+  {
+   "proveedor_key": "900123456",
+   "nombre": "Suministros Andinos S.A.S.",
+   "departamento": "Antioquia",
+   "es_pyme": true,
+   "tiene_historial": true
+  },
+  {
+   "proveedor_key": "901234567",
+   "nombre": "Tecnología Integral del Valle S.A.S.",
+   "departamento": "Valle del Cauca",
+   "es_pyme": true,
+   "tiene_historial": true
+  },
+  {
+   "proveedor_key": "860555444",
+   "nombre": "Constructora Horizonte S.A.",
+   "departamento": "Bogotá D.C.",
+   "es_pyme": false,
+   "tiene_historial": true
+  },
+  {
+   "proveedor_key": "902999888",
+   "nombre": "Servicios Médicos del Caribe S.A.S.",
+   "departamento": "Atlántico",
+   "es_pyme": true,
+   "tiene_historial": true
+  },
+  {
+   "proveedor_key": "903111222",
+   "nombre": "Nueva Logística Pacífico S.A.S.",
+   "departamento": "Nariño",
+   "es_pyme": true,
+   "tiene_historial": false
+  }
+ ],
+ "procesos": [
+  {
+   "id_proceso": "CO1.REQ.9100000",
+   "entidad": "Alcaldía de Manizales",
+   "objeto": "Adquisición de equipos de cómputo portátiles (Manizales)",
+   "categoria": "Computadores",
+   "unspsc_familia": "432115",
+   "departamento": "Caldas",
+   "municipio": "Manizales",
+   "modalidad": "Licitación pública",
+   "precio_base": 15000000.0,
+   "fecha_publicacion": "2026-11-09",
+   "fecha_limite_ofertas": "2026-11-19",
+   "oferentes_esperados": 1.9,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9100137",
+   "entidad": "Gobernación de Antioquia",
+   "objeto": "Adquisición de equipos de cómputo portátiles (Medellín)",
+   "categoria": "Computadores",
+   "unspsc_familia": "432115",
+   "departamento": "Antioquia",
+   "municipio": "Medellín",
+   "modalidad": "Contratación directa",
+   "precio_base": 8000000.0,
+   "fecha_publicacion": "2026-10-31",
+   "fecha_limite_ofertas": "2026-11-12",
+   "oferentes_esperados": 1.7,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9100274",
+   "entidad": "Alcaldía de Cali",
+   "objeto": "Suministro de útiles de oficina y papelería (Cali)",
+   "categoria": "Útiles de oficina",
+   "unspsc_familia": "441216",
+   "departamento": "Valle del Cauca",
+   "municipio": "Cali",
+   "modalidad": "Selección abreviada de menor cuantía",
+   "precio_base": 450000000.0,
+   "fecha_publicacion": "2026-11-01",
+   "fecha_limite_ofertas": "2026-11-29",
+   "oferentes_esperados": 3.4,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9100411",
+   "entidad": "Instituto Nacional de Vías",
+   "objeto": "Suministro de elementos de aseo y cafetería (Bogotá)",
+   "categoria": "Productos de aseo",
+   "unspsc_familia": "471317",
+   "departamento": "Bogotá D.C.",
+   "municipio": "Bogotá",
+   "modalidad": "Selección abreviada de menor cuantía",
+   "precio_base": 450000000.0,
+   "fecha_publicacion": "2026-11-09",
+   "fecha_limite_ofertas": "2026-11-25",
+   "oferentes_esperados": 3.0,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9100548",
+   "entidad": "Hospital San Vicente de Paúl",
+   "objeto": "Suministro de refrigerios para eventos institucionales (Rionegro)",
+   "categoria": "Servicios de alimentación",
+   "unspsc_familia": "901016",
+   "departamento": "Antioquia",
+   "municipio": "Rionegro",
+   "modalidad": "Mínima cuantía",
+   "precio_base": 8000000.0,
+   "fecha_publicacion": "2026-11-04",
+   "fecha_limite_ofertas": "2026-11-24",
+   "oferentes_esperados": 1.7,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9100685",
+   "entidad": "Universidad del Atlántico",
+   "objeto": "Suministro de elementos de aseo y cafetería (Barranquilla)",
+   "categoria": "Productos de aseo",
+   "unspsc_familia": "471317",
+   "departamento": "Atlántico",
+   "municipio": "Barranquilla",
+   "modalidad": "Contratación directa",
+   "precio_base": 120000000.0,
+   "fecha_publicacion": "2026-11-09",
+   "fecha_limite_ofertas": "2026-11-15",
+   "oferentes_esperados": 6.4,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9100822",
+   "entidad": "Alcaldía de Bucaramanga",
+   "objeto": "Adquisición de equipos de cómputo portátiles (Bucaramanga)",
+   "categoria": "Computadores",
+   "unspsc_familia": "432115",
+   "departamento": "Santander",
+   "municipio": "Bucaramanga",
+   "modalidad": "Licitación pública",
+   "precio_base": 900000000.0,
+   "fecha_publicacion": "2026-11-01",
+   "fecha_limite_ofertas": "2026-11-23",
+   "oferentes_esperados": 4.3,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9100959",
+   "entidad": "Policía Nacional",
+   "objeto": "Adquisición de equipos de cómputo portátiles (Bogotá)",
+   "categoria": "Computadores",
+   "unspsc_familia": "432115",
+   "departamento": "Bogotá D.C.",
+   "municipio": "Bogotá",
+   "modalidad": "Selección abreviada de menor cuantía",
+   "precio_base": 900000000.0,
+   "fecha_publicacion": "2026-11-09",
+   "fecha_limite_ofertas": "2026-11-21",
+   "oferentes_esperados": 6.4,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9101096",
+   "entidad": "Alcaldía de Cali",
+   "objeto": "Adquisición de equipos de cómputo portátiles (Cali)",
+   "categoria": "Computadores",
+   "unspsc_familia": "432115",
+   "departamento": "Valle del Cauca",
+   "municipio": "Cali",
+   "modalidad": "Licitación pública",
+   "precio_base": 60000000.0,
+   "fecha_publicacion": "2026-11-03",
+   "fecha_limite_ofertas": "2026-11-23",
+   "oferentes_esperados": 2.1,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9101233",
+   "entidad": "Universidad del Atlántico",
+   "objeto": "Suministro de refrigerios para eventos institucionales (Barranquilla)",
+   "categoria": "Servicios de alimentación",
+   "unspsc_familia": "901016",
+   "departamento": "Atlántico",
+   "municipio": "Barranquilla",
+   "modalidad": "Licitación pública",
+   "precio_base": 450000000.0,
+   "fecha_publicacion": "2026-10-30",
+   "fecha_limite_ofertas": "2026-11-14",
+   "oferentes_esperados": 4.4,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9101370",
+   "entidad": "Hospital San Vicente de Paúl",
+   "objeto": "Suministro de refrigerios para eventos institucionales (Rionegro)",
+   "categoria": "Servicios de alimentación",
+   "unspsc_familia": "901016",
+   "departamento": "Antioquia",
+   "municipio": "Rionegro",
+   "modalidad": "Contratación directa",
+   "precio_base": 60000000.0,
+   "fecha_publicacion": "2026-11-07",
+   "fecha_limite_ofertas": "2026-11-20",
+   "oferentes_esperados": 6.4,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9101507",
+   "entidad": "Alcaldía de Manizales",
+   "objeto": "Suministro de refrigerios para eventos institucionales (Manizales)",
+   "categoria": "Servicios de alimentación",
+   "unspsc_familia": "901016",
+   "departamento": "Caldas",
+   "municipio": "Manizales",
+   "modalidad": "Licitación pública",
+   "precio_base": 900000000.0,
+   "fecha_publicacion": "2026-10-30",
+   "fecha_limite_ofertas": "2026-11-13",
+   "oferentes_esperados": 2.4,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9101644",
+   "entidad": "Alcaldía de Bello",
+   "objeto": "Prestación de servicios de apoyo a la gestión (Bello)",
+   "categoria": "Personal temporal",
+   "unspsc_familia": "801116",
+   "departamento": "Antioquia",
+   "municipio": "Bello",
+   "modalidad": "Licitación pública",
+   "precio_base": 8000000.0,
+   "fecha_publicacion": "2026-11-03",
+   "fecha_limite_ofertas": "2026-11-18",
+   "oferentes_esperados": 6.0,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9101781",
+   "entidad": "ESE Hospital del Sur",
+   "objeto": "Prestación de servicios de apoyo a la gestión (Itagüí)",
+   "categoria": "Personal temporal",
+   "unspsc_familia": "801116",
+   "departamento": "Antioquia",
+   "municipio": "Itagüí",
+   "modalidad": "Contratación directa",
+   "precio_base": 60000000.0,
+   "fecha_publicacion": "2026-11-06",
+   "fecha_limite_ofertas": "2026-11-26",
+   "oferentes_esperados": 2.0,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9101918",
+   "entidad": "Hospital San Vicente de Paúl",
+   "objeto": "Suministro de refrigerios para eventos institucionales (Rionegro)",
+   "categoria": "Servicios de alimentación",
+   "unspsc_familia": "901016",
+   "departamento": "Antioquia",
+   "municipio": "Rionegro",
+   "modalidad": "Licitación pública",
+   "precio_base": 450000000.0,
+   "fecha_publicacion": "2026-10-29",
+   "fecha_limite_ofertas": "2026-11-30",
+   "oferentes_esperados": 3.5,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9102055",
+   "entidad": "ESE Hospital del Sur",
+   "objeto": "Suministro de insumos médico-quirúrgicos (Itagüí)",
+   "categoria": "Insumos médicos",
+   "unspsc_familia": "421316",
+   "departamento": "Antioquia",
+   "municipio": "Itagüí",
+   "modalidad": "Selección abreviada de menor cuantía",
+   "precio_base": 15000000.0,
+   "fecha_publicacion": "2026-11-04",
+   "fecha_limite_ofertas": "2026-11-28",
+   "oferentes_esperados": 3.8,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9102192",
+   "entidad": "Alcaldía de Bello",
+   "objeto": "Adquisición de equipos de cómputo portátiles (Bello)",
+   "categoria": "Computadores",
+   "unspsc_familia": "432115",
+   "departamento": "Antioquia",
+   "municipio": "Bello",
+   "modalidad": "Selección abreviada de menor cuantía",
+   "precio_base": 900000000.0,
+   "fecha_publicacion": "2026-11-07",
+   "fecha_limite_ofertas": "2026-11-25",
+   "oferentes_esperados": 4.4,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9102329",
+   "entidad": "Alcaldía de Bucaramanga",
+   "objeto": "Suministro de insumos médico-quirúrgicos (Bucaramanga)",
+   "categoria": "Insumos médicos",
+   "unspsc_familia": "421316",
+   "departamento": "Santander",
+   "municipio": "Bucaramanga",
+   "modalidad": "Contratación directa",
+   "precio_base": 120000000.0,
+   "fecha_publicacion": "2026-10-31",
+   "fecha_limite_ofertas": "2026-11-20",
+   "oferentes_esperados": 6.3,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9102466",
+   "entidad": "Alcaldía de Bello",
+   "objeto": "Adquisición de equipos de cómputo portátiles (Bello)",
+   "categoria": "Computadores",
+   "unspsc_familia": "432115",
+   "departamento": "Antioquia",
+   "municipio": "Bello",
+   "modalidad": "Licitación pública",
+   "precio_base": 900000000.0,
+   "fecha_publicacion": "2026-10-30",
+   "fecha_limite_ofertas": "2026-11-22",
+   "oferentes_esperados": 1.8,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9102603",
+   "entidad": "Alcaldía de Bucaramanga",
+   "objeto": "Mantenimiento preventivo y correctivo de sedes (Bucaramanga)",
+   "categoria": "Mantenimiento de edificios",
+   "unspsc_familia": "721015",
+   "departamento": "Santander",
+   "municipio": "Bucaramanga",
+   "modalidad": "Mínima cuantía",
+   "precio_base": 450000000.0,
+   "fecha_publicacion": "2026-11-02",
+   "fecha_limite_ofertas": "2026-11-20",
+   "oferentes_esperados": 6.4,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9102740",
+   "entidad": "Hospital San Vicente de Paúl",
+   "objeto": "Adquisición de equipos de cómputo portátiles (Rionegro)",
+   "categoria": "Computadores",
+   "unspsc_familia": "432115",
+   "departamento": "Antioquia",
+   "municipio": "Rionegro",
+   "modalidad": "Licitación pública",
+   "precio_base": 900000000.0,
+   "fecha_publicacion": "2026-10-30",
+   "fecha_limite_ofertas": "2026-11-28",
+   "oferentes_esperados": 4.4,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9102877",
+   "entidad": "Hospital San Vicente de Paúl",
+   "objeto": "Prestación de servicios de apoyo a la gestión (Rionegro)",
+   "categoria": "Personal temporal",
+   "unspsc_familia": "801116",
+   "departamento": "Antioquia",
+   "municipio": "Rionegro",
+   "modalidad": "Mínima cuantía",
+   "precio_base": 120000000.0,
+   "fecha_publicacion": "2026-11-07",
+   "fecha_limite_ofertas": "2026-11-22",
+   "oferentes_esperados": 3.8,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9103014",
+   "entidad": "Gobernación de Antioquia",
+   "objeto": "Prestación de servicios de apoyo a la gestión (Medellín)",
+   "categoria": "Personal temporal",
+   "unspsc_familia": "801116",
+   "departamento": "Antioquia",
+   "municipio": "Medellín",
+   "modalidad": "Selección abreviada de menor cuantía",
+   "precio_base": 8000000.0,
+   "fecha_publicacion": "2026-11-05",
+   "fecha_limite_ofertas": "2026-11-19",
+   "oferentes_esperados": 5.9,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9103151",
+   "entidad": "Gobernación de Antioquia",
+   "objeto": "Adquisición de equipos de cómputo portátiles (Medellín)",
+   "categoria": "Computadores",
+   "unspsc_familia": "432115",
+   "departamento": "Antioquia",
+   "municipio": "Medellín",
+   "modalidad": "Contratación directa",
+   "precio_base": 900000000.0,
+   "fecha_publicacion": "2026-10-29",
+   "fecha_limite_ofertas": "2026-11-14",
+   "oferentes_esperados": 6.4,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9103288",
+   "entidad": "Alcaldía de Pasto",
+   "objeto": "Mantenimiento preventivo y correctivo de sedes (Pasto)",
+   "categoria": "Mantenimiento de edificios",
+   "unspsc_familia": "721015",
+   "departamento": "Nariño",
+   "municipio": "Pasto",
+   "modalidad": "Contratación directa",
+   "precio_base": 120000000.0,
+   "fecha_publicacion": "2026-11-07",
+   "fecha_limite_ofertas": "2026-11-17",
+   "oferentes_esperados": 2.6,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9103425",
+   "entidad": "ESE Hospital del Sur",
+   "objeto": "Suministro de insumos médico-quirúrgicos (Itagüí)",
+   "categoria": "Insumos médicos",
+   "unspsc_familia": "421316",
+   "departamento": "Antioquia",
+   "municipio": "Itagüí",
+   "modalidad": "Selección abreviada de menor cuantía",
+   "precio_base": 450000000.0,
+   "fecha_publicacion": "2026-11-06",
+   "fecha_limite_ofertas": "2026-11-21",
+   "oferentes_esperados": 3.3,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9103562",
+   "entidad": "Alcaldía de Manizales",
+   "objeto": "Prestación de servicios de apoyo a la gestión (Manizales)",
+   "categoria": "Personal temporal",
+   "unspsc_familia": "801116",
+   "departamento": "Caldas",
+   "municipio": "Manizales",
+   "modalidad": "Contratación directa",
+   "precio_base": 8000000.0,
+   "fecha_publicacion": "2026-11-02",
+   "fecha_limite_ofertas": "2026-11-19",
+   "oferentes_esperados": 2.4,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9103699",
+   "entidad": "Universidad del Atlántico",
+   "objeto": "Suministro de útiles de oficina y papelería (Barranquilla)",
+   "categoria": "Útiles de oficina",
+   "unspsc_familia": "441216",
+   "departamento": "Atlántico",
+   "municipio": "Barranquilla",
+   "modalidad": "Selección abreviada de menor cuantía",
+   "precio_base": 120000000.0,
+   "fecha_publicacion": "2026-10-31",
+   "fecha_limite_ofertas": "2026-11-19",
+   "oferentes_esperados": 1.2,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9103836",
+   "entidad": "Policía Nacional",
+   "objeto": "Suministro de útiles de oficina y papelería (Bogotá)",
+   "categoria": "Útiles de oficina",
+   "unspsc_familia": "441216",
+   "departamento": "Bogotá D.C.",
+   "municipio": "Bogotá",
+   "modalidad": "Mínima cuantía",
+   "precio_base": 8000000.0,
+   "fecha_publicacion": "2026-11-06",
+   "fecha_limite_ofertas": "2026-11-22",
+   "oferentes_esperados": 1.6,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9103973",
+   "entidad": "Alcaldía de Cali",
+   "objeto": "Suministro de elementos de aseo y cafetería (Cali)",
+   "categoria": "Productos de aseo",
+   "unspsc_familia": "471317",
+   "departamento": "Valle del Cauca",
+   "municipio": "Cali",
+   "modalidad": "Contratación directa",
+   "precio_base": 15000000.0,
+   "fecha_publicacion": "2026-10-30",
+   "fecha_limite_ofertas": "2026-11-29",
+   "oferentes_esperados": 1.9,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9104110",
+   "entidad": "ESE Hospital del Sur",
+   "objeto": "Servicio de transporte especial de pasajeros (Itagüí)",
+   "categoria": "Transporte de pasajeros",
+   "unspsc_familia": "781118",
+   "departamento": "Antioquia",
+   "municipio": "Itagüí",
+   "modalidad": "Contratación directa",
+   "precio_base": 900000000.0,
+   "fecha_publicacion": "2026-11-06",
+   "fecha_limite_ofertas": "2026-11-25",
+   "oferentes_esperados": 2.2,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9104247",
+   "entidad": "Gobernación de Antioquia",
+   "objeto": "Suministro de insumos médico-quirúrgicos (Medellín)",
+   "categoria": "Insumos médicos",
+   "unspsc_familia": "421316",
+   "departamento": "Antioquia",
+   "municipio": "Medellín",
+   "modalidad": "Contratación directa",
+   "precio_base": 60000000.0,
+   "fecha_publicacion": "2026-11-04",
+   "fecha_limite_ofertas": "2026-11-26",
+   "oferentes_esperados": 5.8,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9104384",
+   "entidad": "Alcaldía de Bello",
+   "objeto": "Adquisición de equipos de cómputo portátiles (Bello)",
+   "categoria": "Computadores",
+   "unspsc_familia": "432115",
+   "departamento": "Antioquia",
+   "municipio": "Bello",
+   "modalidad": "Contratación directa",
+   "precio_base": 450000000.0,
+   "fecha_publicacion": "2026-11-09",
+   "fecha_limite_ofertas": "2026-11-22",
+   "oferentes_esperados": 5.4,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9104521",
+   "entidad": "Gobernación de Antioquia",
+   "objeto": "Suministro de refrigerios para eventos institucionales (Medellín)",
+   "categoria": "Servicios de alimentación",
+   "unspsc_familia": "901016",
+   "departamento": "Antioquia",
+   "municipio": "Medellín",
+   "modalidad": "Selección abreviada de menor cuantía",
+   "precio_base": 120000000.0,
+   "fecha_publicacion": "2026-11-06",
+   "fecha_limite_ofertas": "2026-11-26",
+   "oferentes_esperados": 1.9,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9104658",
+   "entidad": "Hospital San Vicente de Paúl",
+   "objeto": "Suministro de elementos de aseo y cafetería (Rionegro)",
+   "categoria": "Productos de aseo",
+   "unspsc_familia": "471317",
+   "departamento": "Antioquia",
+   "municipio": "Rionegro",
+   "modalidad": "Selección abreviada de menor cuantía",
+   "precio_base": 900000000.0,
+   "fecha_publicacion": "2026-11-02",
+   "fecha_limite_ofertas": "2026-11-14",
+   "oferentes_esperados": 3.5,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9104795",
+   "entidad": "Alcaldía de Pasto",
+   "objeto": "Adquisición de equipos de cómputo portátiles (Pasto)",
+   "categoria": "Computadores",
+   "unspsc_familia": "432115",
+   "departamento": "Nariño",
+   "municipio": "Pasto",
+   "modalidad": "Mínima cuantía",
+   "precio_base": 8000000.0,
+   "fecha_publicacion": "2026-11-09",
+   "fecha_limite_ofertas": "2026-11-19",
+   "oferentes_esperados": 2.1,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9104932",
+   "entidad": "Instituto Nacional de Vías",
+   "objeto": "Servicio de transporte especial de pasajeros (Bogotá)",
+   "categoria": "Transporte de pasajeros",
+   "unspsc_familia": "781118",
+   "departamento": "Bogotá D.C.",
+   "municipio": "Bogotá",
+   "modalidad": "Contratación directa",
+   "precio_base": 8000000.0,
+   "fecha_publicacion": "2026-11-06",
+   "fecha_limite_ofertas": "2026-11-17",
+   "oferentes_esperados": 3.2,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9105069",
+   "entidad": "Alcaldía de Bucaramanga",
+   "objeto": "Suministro de elementos de aseo y cafetería (Bucaramanga)",
+   "categoria": "Productos de aseo",
+   "unspsc_familia": "471317",
+   "departamento": "Santander",
+   "municipio": "Bucaramanga",
+   "modalidad": "Licitación pública",
+   "precio_base": 60000000.0,
+   "fecha_publicacion": "2026-11-02",
+   "fecha_limite_ofertas": "2026-11-29",
+   "oferentes_esperados": 4.7,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9105206",
+   "entidad": "Instituto Nacional de Vías",
+   "objeto": "Mantenimiento preventivo y correctivo de sedes (Bogotá)",
+   "categoria": "Mantenimiento de edificios",
+   "unspsc_familia": "721015",
+   "departamento": "Bogotá D.C.",
+   "municipio": "Bogotá",
+   "modalidad": "Licitación pública",
+   "precio_base": 15000000.0,
+   "fecha_publicacion": "2026-11-06",
+   "fecha_limite_ofertas": "2026-11-13",
+   "oferentes_esperados": 4.3,
+   "url_proceso": null
+  },
+  {
+   "id_proceso": "CO1.REQ.9105343",
+   "entidad": "Alcaldía de Pasto",
+   "objeto": "Suministro de útiles de oficina y papelería (Pasto)",
+   "categoria": "Útiles de oficina",
+   "unspsc_familia": "441216",
+   "departamento": "Nariño",
+   "municipio": "Pasto",
+   "modalidad": "Licitación pública",
+   "precio_base": 8000000.0,
+   "fecha_publicacion": "2026-10-29",
+   "fecha_limite_ofertas": "2026-11-13",
+   "oferentes_esperados": 4.3,
+   "url_proceso": null
+  }
+ ],
+ "recomendaciones": {
+  "900123456": {
+   "historial": [
+    {
+     "posicion": 1,
+     "id_proceso": "CO1.REQ.9100685",
+     "probabilidad": 0.75,
+     "motivos": [
+      "Valor parecido a contratos que has ganado",
+      "Ya ha trabajado con esta entidad"
+     ]
+    },
+    {
+     "posicion": 2,
+     "id_proceso": "CO1.REQ.9100548",
+     "probabilidad": 0.75,
+     "motivos": [
+      "Valor parecido a contratos que has ganado",
+      "Parecido a procesos que has ganado"
+     ]
+    },
+    {
+     "posicion": 3,
+     "id_proceso": "CO1.REQ.9104795",
+     "probabilidad": 0.6,
+     "motivos": [
+      "Valor parecido a contratos que has ganado",
+      "Ya ha trabajado con esta entidad"
+     ]
+    },
+    {
+     "posicion": 4,
+     "id_proceso": "CO1.REQ.9104521",
+     "probabilidad": 0.42,
+     "motivos": [
+      "Ya ha trabajado con esta entidad",
+      "Parecido a procesos que has ganado"
+     ]
+    },
+    {
+     "posicion": 5,
+     "id_proceso": "CO1.REQ.9100411",
+     "probabilidad": 0.34,
+     "motivos": [
+      "Ya ha trabajado con esta entidad",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 6,
+     "id_proceso": "CO1.REQ.9101370",
+     "probabilidad": 0.33,
+     "motivos": [
+      "Valor parecido a contratos que has ganado",
+      "Ya ha trabajado con esta entidad"
+     ]
+    },
+    {
+     "posicion": 7,
+     "id_proceso": "CO1.REQ.9104384",
+     "probabilidad": 0.31,
+     "motivos": [
+      "Parecido a procesos que has ganado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 8,
+     "id_proceso": "CO1.REQ.9102877",
+     "probabilidad": 0.28,
+     "motivos": [
+      "Valor parecido a contratos que has ganado",
+      "Ya ha trabajado con esta entidad"
+     ]
+    },
+    {
+     "posicion": 9,
+     "id_proceso": "CO1.REQ.9101507",
+     "probabilidad": 0.19,
+     "motivos": [
+      "Valor parecido a contratos que has ganado",
+      "Parecido a procesos que has ganado"
+     ]
+    },
+    {
+     "posicion": 10,
+     "id_proceso": "CO1.REQ.9105343",
+     "probabilidad": 0.19,
+     "motivos": [
+      "Ya ha trabajado con esta entidad",
+      "Parecido a procesos que has ganado"
+     ]
+    }
+   ],
+   "oportunidad": [
+    {
+     "posicion": 1,
+     "id_proceso": "CO1.REQ.9103699",
+     "probabilidad": 0.54,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 2,
+     "id_proceso": "CO1.REQ.9100959",
+     "probabilidad": 0.52,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 3,
+     "id_proceso": "CO1.REQ.9101644",
+     "probabilidad": 0.5,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Suele tener pocos competidores"
+     ]
+    },
+    {
+     "posicion": 4,
+     "id_proceso": "CO1.REQ.9104932",
+     "probabilidad": 0.5,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Suele tener pocos competidores"
+     ]
+    },
+    {
+     "posicion": 5,
+     "id_proceso": "CO1.REQ.9102466",
+     "probabilidad": 0.48,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 6,
+     "id_proceso": "CO1.REQ.9103836",
+     "probabilidad": 0.42,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 7,
+     "id_proceso": "CO1.REQ.9103425",
+     "probabilidad": 0.38,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Suele tener pocos competidores"
+     ]
+    },
+    {
+     "posicion": 8,
+     "id_proceso": "CO1.REQ.9102603",
+     "probabilidad": 0.27,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Suele tener pocos competidores"
+     ]
+    },
+    {
+     "posicion": 9,
+     "id_proceso": "CO1.REQ.9100137",
+     "probabilidad": 0.17,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    }
+   ]
+  },
+  "901234567": {
+   "historial": [
+    {
+     "posicion": 1,
+     "id_proceso": "CO1.REQ.9103699",
+     "probabilidad": 0.73,
+     "motivos": [
+      "Parecido a procesos que has ganado",
+      "Ya ha trabajado con esta entidad"
+     ]
+    },
+    {
+     "posicion": 2,
+     "id_proceso": "CO1.REQ.9102192",
+     "probabilidad": 0.71,
+     "motivos": [
+      "Parecido a procesos que has ganado",
+      "Ya ha trabajado con esta entidad"
+     ]
+    },
+    {
+     "posicion": 3,
+     "id_proceso": "CO1.REQ.9104110",
+     "probabilidad": 0.67,
+     "motivos": [
+      "Ya ha trabajado con esta entidad",
+      "Parecido a procesos que has ganado"
+     ]
+    },
+    {
+     "posicion": 4,
+     "id_proceso": "CO1.REQ.9100000",
+     "probabilidad": 0.63,
+     "motivos": [
+      "Parecido a procesos que has ganado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 5,
+     "id_proceso": "CO1.REQ.9101370",
+     "probabilidad": 0.6,
+     "motivos": [
+      "Ya ha trabajado con esta entidad",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 6,
+     "id_proceso": "CO1.REQ.9101096",
+     "probabilidad": 0.49,
+     "motivos": [
+      "Ya ha trabajado con esta entidad",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 7,
+     "id_proceso": "CO1.REQ.9100548",
+     "probabilidad": 0.4,
+     "motivos": [
+      "Parecido a procesos que has ganado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 8,
+     "id_proceso": "CO1.REQ.9100959",
+     "probabilidad": 0.29,
+     "motivos": [
+      "Parecido a procesos que has ganado",
+      "Ya ha trabajado con esta entidad"
+     ]
+    },
+    {
+     "posicion": 9,
+     "id_proceso": "CO1.REQ.9103836",
+     "probabilidad": 0.26,
+     "motivos": [
+      "Parecido a procesos que has ganado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 10,
+     "id_proceso": "CO1.REQ.9104795",
+     "probabilidad": 0.25,
+     "motivos": [
+      "Valor parecido a contratos que has ganado",
+      "Parecido a procesos que has ganado"
+     ]
+    }
+   ],
+   "oportunidad": [
+    {
+     "posicion": 1,
+     "id_proceso": "CO1.REQ.9104932",
+     "probabilidad": 0.52,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 2,
+     "id_proceso": "CO1.REQ.9103014",
+     "probabilidad": 0.45,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Suele tener pocos competidores"
+     ]
+    },
+    {
+     "posicion": 3,
+     "id_proceso": "CO1.REQ.9104247",
+     "probabilidad": 0.43,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Suele tener pocos competidores"
+     ]
+    },
+    {
+     "posicion": 4,
+     "id_proceso": "CO1.REQ.9102329",
+     "probabilidad": 0.42,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 5,
+     "id_proceso": "CO1.REQ.9100137",
+     "probabilidad": 0.4,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Suele tener pocos competidores"
+     ]
+    },
+    {
+     "posicion": 6,
+     "id_proceso": "CO1.REQ.9101507",
+     "probabilidad": 0.29,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 7,
+     "id_proceso": "CO1.REQ.9102466",
+     "probabilidad": 0.21,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Suele tener pocos competidores"
+     ]
+    },
+    {
+     "posicion": 8,
+     "id_proceso": "CO1.REQ.9103562",
+     "probabilidad": 0.18,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Suele tener pocos competidores"
+     ]
+    },
+    {
+     "posicion": 9,
+     "id_proceso": "CO1.REQ.9104658",
+     "probabilidad": 0.17,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    }
+   ]
+  },
+  "860555444": {
+   "historial": [
+    {
+     "posicion": 1,
+     "id_proceso": "CO1.REQ.9102740",
+     "probabilidad": 0.71,
+     "motivos": [
+      "Valor parecido a contratos que has ganado",
+      "Ya ha trabajado con esta entidad"
+     ]
+    },
+    {
+     "posicion": 2,
+     "id_proceso": "CO1.REQ.9102192",
+     "probabilidad": 0.69,
+     "motivos": [
+      "Valor parecido a contratos que has ganado",
+      "Ya ha trabajado con esta entidad"
+     ]
+    },
+    {
+     "posicion": 3,
+     "id_proceso": "CO1.REQ.9100274",
+     "probabilidad": 0.56,
+     "motivos": [
+      "Parecido a procesos que has ganado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 4,
+     "id_proceso": "CO1.REQ.9100959",
+     "probabilidad": 0.52,
+     "motivos": [
+      "Ya ha trabajado con esta entidad",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 5,
+     "id_proceso": "CO1.REQ.9104384",
+     "probabilidad": 0.48,
+     "motivos": [
+      "Valor parecido a contratos que has ganado",
+      "Parecido a procesos que has ganado"
+     ]
+    },
+    {
+     "posicion": 6,
+     "id_proceso": "CO1.REQ.9103014",
+     "probabilidad": 0.4,
+     "motivos": [
+      "Ya ha trabajado con esta entidad",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 7,
+     "id_proceso": "CO1.REQ.9105343",
+     "probabilidad": 0.39,
+     "motivos": [
+      "Ya ha trabajado con esta entidad",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 8,
+     "id_proceso": "CO1.REQ.9103699",
+     "probabilidad": 0.33,
+     "motivos": [
+      "Ya ha trabajado con esta entidad",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 9,
+     "id_proceso": "CO1.REQ.9101644",
+     "probabilidad": 0.33,
+     "motivos": [
+      "Parecido a procesos que has ganado",
+      "Ya ha trabajado con esta entidad"
+     ]
+    },
+    {
+     "posicion": 10,
+     "id_proceso": "CO1.REQ.9103288",
+     "probabilidad": 0.23,
+     "motivos": [
+      "Parecido a procesos que has ganado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    }
+   ],
+   "oportunidad": [
+    {
+     "posicion": 1,
+     "id_proceso": "CO1.REQ.9101781",
+     "probabilidad": 0.39,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Suele tener pocos competidores"
+     ]
+    },
+    {
+     "posicion": 2,
+     "id_proceso": "CO1.REQ.9100000",
+     "probabilidad": 0.36,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 3,
+     "id_proceso": "CO1.REQ.9104932",
+     "probabilidad": 0.31,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 4,
+     "id_proceso": "CO1.REQ.9103425",
+     "probabilidad": 0.31,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 5,
+     "id_proceso": "CO1.REQ.9102329",
+     "probabilidad": 0.3,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Suele tener pocos competidores"
+     ]
+    },
+    {
+     "posicion": 6,
+     "id_proceso": "CO1.REQ.9102877",
+     "probabilidad": 0.29,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Suele tener pocos competidores"
+     ]
+    },
+    {
+     "posicion": 7,
+     "id_proceso": "CO1.REQ.9103151",
+     "probabilidad": 0.23,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Suele tener pocos competidores"
+     ]
+    },
+    {
+     "posicion": 8,
+     "id_proceso": "CO1.REQ.9104658",
+     "probabilidad": 0.2,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Suele tener pocos competidores"
+     ]
+    },
+    {
+     "posicion": 9,
+     "id_proceso": "CO1.REQ.9100822",
+     "probabilidad": 0.1,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    }
+   ]
+  },
+  "902999888": {
+   "historial": [
+    {
+     "posicion": 1,
+     "id_proceso": "CO1.REQ.9102055",
+     "probabilidad": 0.61,
+     "motivos": [
+      "Ya ha trabajado con esta entidad",
+      "Parecido a procesos que has ganado"
+     ]
+    },
+    {
+     "posicion": 2,
+     "id_proceso": "CO1.REQ.9104932",
+     "probabilidad": 0.53,
+     "motivos": [
+      "Valor parecido a contratos que has ganado",
+      "Ya ha trabajado con esta entidad"
+     ]
+    },
+    {
+     "posicion": 3,
+     "id_proceso": "CO1.REQ.9101918",
+     "probabilidad": 0.53,
+     "motivos": [
+      "Valor parecido a contratos que has ganado",
+      "Ya ha trabajado con esta entidad"
+     ]
+    },
+    {
+     "posicion": 4,
+     "id_proceso": "CO1.REQ.9103973",
+     "probabilidad": 0.46,
+     "motivos": [
+      "Ya ha trabajado con esta entidad",
+      "Parecido a procesos que has ganado"
+     ]
+    },
+    {
+     "posicion": 5,
+     "id_proceso": "CO1.REQ.9100411",
+     "probabilidad": 0.43,
+     "motivos": [
+      "Parecido a procesos que has ganado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 6,
+     "id_proceso": "CO1.REQ.9103425",
+     "probabilidad": 0.32,
+     "motivos": [
+      "Valor parecido a contratos que has ganado",
+      "Parecido a procesos que has ganado"
+     ]
+    },
+    {
+     "posicion": 7,
+     "id_proceso": "CO1.REQ.9100959",
+     "probabilidad": 0.31,
+     "motivos": [
+      "Parecido a procesos que has ganado",
+      "Ya ha trabajado con esta entidad"
+     ]
+    },
+    {
+     "posicion": 8,
+     "id_proceso": "CO1.REQ.9104521",
+     "probabilidad": 0.31,
+     "motivos": [
+      "Ya ha trabajado con esta entidad",
+      "Parecido a procesos que has ganado"
+     ]
+    },
+    {
+     "posicion": 9,
+     "id_proceso": "CO1.REQ.9101096",
+     "probabilidad": 0.3,
+     "motivos": [
+      "Parecido a procesos que has ganado",
+      "Ya ha trabajado con esta entidad"
+     ]
+    },
+    {
+     "posicion": 10,
+     "id_proceso": "CO1.REQ.9101507",
+     "probabilidad": 0.2,
+     "motivos": [
+      "Valor parecido a contratos que has ganado",
+      "Parecido a procesos que has ganado"
+     ]
+    }
+   ],
+   "oportunidad": [
+    {
+     "posicion": 1,
+     "id_proceso": "CO1.REQ.9105343",
+     "probabilidad": 0.34,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 2,
+     "id_proceso": "CO1.REQ.9102877",
+     "probabilidad": 0.24,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Suele tener pocos competidores"
+     ]
+    },
+    {
+     "posicion": 3,
+     "id_proceso": "CO1.REQ.9102192",
+     "probabilidad": 0.22,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    },
+    {
+     "posicion": 4,
+     "id_proceso": "CO1.REQ.9102329",
+     "probabilidad": 0.16,
+     "motivos": [
+      "Entidad con la que no has trabajado",
+      "Valor parecido a contratos que has ganado"
+     ]
+    }
+   ]
+  }
+ },
+ "estadisticas": {
+  "procesos_por_departamento": {
+   "indicador": "procesos_por_departamento",
+   "descripcion": "Procesos con competencia publicados en 2026, por departamento de la entidad",
+   "unidad": "procesos",
+   "datos": [
+    {
+     "etiqueta": "Bogotá D.C.",
+     "valor": 7189.0
+    },
+    {
+     "etiqueta": "Antioquia",
+     "valor": 7665.0
+    },
+    {
+     "etiqueta": "Valle del Cauca",
+     "valor": 4413.0
+    },
+    {
+     "etiqueta": "Santander",
+     "valor": 8799.0
+    },
+    {
+     "etiqueta": "Atlántico",
+     "valor": 4395.0
+    },
+    {
+     "etiqueta": "Cundinamarca",
+     "valor": 5271.0
+    },
+    {
+     "etiqueta": "Bolívar",
+     "valor": 7940.0
+    },
+    {
+     "etiqueta": "Nariño",
+     "valor": 8756.0
+    }
+   ]
+  },
+  "procesos_por_categoria": {
+   "indicador": "procesos_por_categoria",
+   "descripcion": "Procesos publicados en 2026 por categoría UNSPSC",
+   "unidad": "procesos",
+   "datos": [
+    {
+     "etiqueta": "Útiles de oficina",
+     "valor": 537.0
+    },
+    {
+     "etiqueta": "Computadores",
+     "valor": 3485.0
+    },
+    {
+     "etiqueta": "Mantenimiento de edificios",
+     "valor": 3053.0
+    },
+    {
+     "etiqueta": "Servicios de alimentación",
+     "valor": 3612.0
+    },
+    {
+     "etiqueta": "Productos de aseo",
+     "valor": 1652.0
+    },
+    {
+     "etiqueta": "Personal temporal",
+     "valor": 4128.0
+    },
+    {
+     "etiqueta": "Insumos médicos",
+     "valor": 1345.0
+    },
+    {
+     "etiqueta": "Transporte de pasajeros",
+     "valor": 4675.0
+    }
+   ]
+  },
+  "procesos_por_mes": {
+   "indicador": "procesos_por_mes",
+   "descripcion": "Procesos publicados por mes",
+   "unidad": "procesos",
+   "datos": [
+    {
+     "etiqueta": "2026-01",
+     "valor": 4220.0
+    },
+    {
+     "etiqueta": "2026-02",
+     "valor": 7227.0
+    },
+    {
+     "etiqueta": "2026-03",
+     "valor": 8848.0
+    },
+    {
+     "etiqueta": "2026-04",
+     "valor": 8623.0
+    },
+    {
+     "etiqueta": "2026-05",
+     "valor": 4222.0
+    },
+    {
+     "etiqueta": "2026-06",
+     "valor": 4687.0
+    },
+    {
+     "etiqueta": "2026-07",
+     "valor": 7511.0
+    },
+    {
+     "etiqueta": "2026-08",
+     "valor": 5111.0
+    },
+    {
+     "etiqueta": "2026-09",
+     "valor": 7782.0
+    },
+    {
+     "etiqueta": "2026-10",
+     "valor": 5488.0
+    }
+   ]
+  },
+  "pct_un_oferente_por_departamento": {
+   "indicador": "pct_un_oferente_por_departamento",
+   "descripcion": "% de procesos adjudicados con un solo oferente",
+   "unidad": "%",
+   "datos": [
+    {
+     "etiqueta": "Bogotá D.C.",
+     "valor": 26.8
+    },
+    {
+     "etiqueta": "Antioquia",
+     "valor": 38.3
+    },
+    {
+     "etiqueta": "Valle del Cauca",
+     "valor": 32.4
+    },
+    {
+     "etiqueta": "Santander",
+     "valor": 36.4
+    },
+    {
+     "etiqueta": "Atlántico",
+     "valor": 51.6
+    },
+    {
+     "etiqueta": "Cundinamarca",
+     "valor": 38.3
+    },
+    {
+     "etiqueta": "Bolívar",
+     "valor": 51.3
+    },
+    {
+     "etiqueta": "Nariño",
+     "valor": 54.1
+    }
+   ]
+  },
+  "pct_ganados_por_pymes": {
+   "indicador": "pct_ganados_por_pymes",
+   "descripcion": "% de procesos adjudicados a pymes por mes",
+   "unidad": "%",
+   "datos": [
+    {
+     "etiqueta": "2026-01",
+     "valor": 46.3
+    },
+    {
+     "etiqueta": "2026-02",
+     "valor": 42.0
+    },
+    {
+     "etiqueta": "2026-03",
+     "valor": 40.5
+    },
+    {
+     "etiqueta": "2026-04",
+     "valor": 53.5
+    },
+    {
+     "etiqueta": "2026-05",
+     "valor": 65.0
+    },
+    {
+     "etiqueta": "2026-06",
+     "valor": 48.7
+    },
+    {
+     "etiqueta": "2026-07",
+     "valor": 56.3
+    },
+    {
+     "etiqueta": "2026-08",
+     "valor": 59.5
+    },
+    {
+     "etiqueta": "2026-09",
+     "valor": 56.3
+    },
+    {
+     "etiqueta": "2026-10",
+     "valor": 58.9
+    }
+   ]
+  },
+  "top_entidades": {
+   "indicador": "top_entidades",
+   "descripcion": "Entidades con más procesos publicados en 2026",
+   "unidad": "procesos",
+   "datos": [
+    {
+     "etiqueta": "Alcaldía de Bucaramanga",
+     "valor": 2139.0
+    },
+    {
+     "etiqueta": "ESE Hospital del Sur",
+     "valor": 2104.0
+    },
+    {
+     "etiqueta": "Policía Nacional",
+     "valor": 1710.0
+    },
+    {
+     "etiqueta": "Alcaldía de Manizales",
+     "valor": 1249.0
+    },
+    {
+     "etiqueta": "Alcaldía de Bello",
+     "valor": 1212.0
+    },
+    {
+     "etiqueta": "Ministerio de Educación Nacional",
+     "valor": 1177.0
+    },
+    {
+     "etiqueta": "Alcaldía de Pasto",
+     "valor": 1092.0
+    },
+    {
+     "etiqueta": "Gobernación de Antioquia",
+     "valor": 1016.0
+    },
+    {
+     "etiqueta": "Alcaldía de Cali",
+     "valor": 824.0
+    },
+    {
+     "etiqueta": "Universidad del Atlántico",
+     "valor": 717.0
+    }
+   ]
+  }
+ },
+ "metricas": {
+  "periodo_prueba": "jul 2025 – jul 2026",
+  "lista_historial": [
+   {
+    "nombre": "Precision@10",
+    "valor": 0.11,
+    "referencia": 0.086,
+    "nombre_referencia": "Retrieval solo"
+   },
+   {
+    "nombre": "Recall@10",
+    "valor": 0.566,
+    "referencia": 0.455,
+    "nombre_referencia": "Retrieval solo"
+   },
+   {
+    "nombre": "NDCG@10",
+    "valor": 0.462,
+    "referencia": 0.362,
+    "nombre_referencia": "Retrieval solo"
+   }
+  ],
+  "lista_oportunidad": [
+   {
+    "nombre": "% oportunidades plausibles",
+    "valor": 67.7,
+    "referencia": 62.2,
+    "nombre_referencia": "Azar con filtros"
+   },
+   {
+    "nombre": "% plausibles con ganador similar",
+    "valor": 23.0,
+    "referencia": 20.7,
+    "nombre_referencia": "Azar con filtros"
+   },
+   {
+    "nombre": "MAP@10 (plausible)",
+    "valor": 0.761,
+    "referencia": 0.701,
+    "nombre_referencia": "Azar con filtros"
+   }
+  ],
+  "calibracion_pgana": [
+   {
+    "decil": 1,
+    "probabilidad_media": 0.04,
+    "tasa_real": 0.027
+   },
+   {
+    "decil": 2,
+    "probabilidad_media": 0.125,
+    "tasa_real": 0.129
+   },
+   {
+    "decil": 3,
+    "probabilidad_media": 0.21,
+    "tasa_real": 0.22
+   },
+   {
+    "decil": 4,
+    "probabilidad_media": 0.295,
+    "tasa_real": 0.28
+   },
+   {
+    "decil": 5,
+    "probabilidad_media": 0.38,
+    "tasa_real": 0.393
+   },
+   {
+    "decil": 6,
+    "probabilidad_media": 0.465,
+    "tasa_real": 0.484
+   },
+   {
+    "decil": 7,
+    "probabilidad_media": 0.55,
+    "tasa_real": 0.534
+   },
+   {
+    "decil": 8,
+    "probabilidad_media": 0.635,
+    "tasa_real": 0.616
+   },
+   {
+    "decil": 9,
+    "probabilidad_media": 0.72,
+    "tasa_real": 0.712
+   },
+   {
+    "decil": 10,
+    "probabilidad_media": 0.805,
+    "tasa_real": 0.812
+   }
+  ]
+ }
+}

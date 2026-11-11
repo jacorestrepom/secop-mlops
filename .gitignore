@@ -1,0 +1,24 @@
+# Datos y modelos: pesan GB y viven en S3 (s3://proyecto-integrador-bucket-01/)
+data/
+modelos/
+*.parquet
+*.csv
+mlruns/
+mlartifacts/
+
+# Credenciales: nunca al repo
+.env
+.env.*
+!.env.ejemplo
+*credentials*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Sistema
+.DS_Store

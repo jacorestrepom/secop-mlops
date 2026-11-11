@@ -1,0 +1,13 @@
+# Plan B local. Por ahora solo la API simulada; PostgreSQL y MLflow se agregan en los pasos 2 y 4.
+# Uso, desde la raíz del repo:  docker compose -f infra/docker-compose.yml up --build
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: api/Dockerfile
+    image: secop-api:local
+    ports:
+      - "8000:8000"
+    environment:
+      FUENTE_DATOS: simulada
+      CORS_ORIGINS: http://localhost:5173
