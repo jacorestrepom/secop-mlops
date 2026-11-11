@@ -1,0 +1,8 @@
+# Imagen secop-jobs y scripts de jobs/. MLflow fijo: la misma versión que corre el servidor en la EC2.
+mlflow==3.18.0
+lightgbm==4.7.0
+pandas>=2.2,<3
+pyarrow>=17
+numpy>=1.26
+boto3>=1.34
+psycopg2-binary==2.9.10
