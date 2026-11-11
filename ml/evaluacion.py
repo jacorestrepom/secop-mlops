@@ -70,3 +70,12 @@ def coincidencia_por_empresa(nuestras: pd.DataFrame, referencia: pd.DataFrame) -
                           id_proceso=referencia.id_proceso.astype(str))
     m = a[k + ["id_proceso"]].merge(b[k + ["id_proceso"]], on=k, how="outer", suffixes=("", "_r"))
     return float((m.id_proceso == m.id_proceso_r).groupby(m.proveedor_key).all().mean())
+
+
+def recall_retrieval(candidatos: pd.DataFrame, positivos: pd.DataFrame, k: int = 150) -> float:
+    """``recall_k`` del notebook 03: por empresa con positivos, fracción de sus positivos dentro de sus k candidatos
+    (rank_retrieval ≤ k), promediada sobre las empresas. ``positivos``: pares (pk, pid) en que se presentó."""
+    c = candidatos[candidatos.rank_retrieval <= k][["pk", "pid"]].drop_duplicates()
+    acierto = c.merge(positivos.drop_duplicates(), on=["pk", "pid"]).groupby("pk").size()
+    n_pos = positivos.drop_duplicates().groupby("pk").size()
+    return float((acierto.reindex(n_pos.index, fill_value=0) / n_pos).mean())

@@ -2,10 +2,11 @@
 
 Dos partes:
 
-1. Contra la referencia generada con ml/ dentro del contenedor de pruebas (tests/referencia/): cada etapa de
-   punta a punta (recuperar, construir, rankear, armar_listas) debe dar exactamente lo mismo, con p_gana a menos
-   de 1e-9. Solo vale DENTRO de esa imagen linux/amd64: los empates y la numérica del SVD cambian entre
-   plataformas. Necesita SECOP_REFERENCIA_DIR (carpeta con 202603/candidatos.parquet, ...); si falta, se salta.
+1. Contra la referencia generada con ml/ dentro del contenedor de pruebas (tests/referencia/), sobre una muestra
+   fija de 300 empresas de marzo (con y sin historial): cada etapa de punta a punta (recuperar, construir,
+   rankear, armar_listas) debe dar exactamente lo mismo, con p_gana a menos de 1e-9. Solo vale DENTRO de esa
+   imagen linux/amd64: los empates y la numérica del SVD cambian entre plataformas. Necesita
+   SECOP_REFERENCIA_DIR (carpeta con 202603/muestra_empresas.parquet, ...); si falta, se salta.
 
 2. Contra el notebook, para los módulos que no dependen de la plataforma: config.json, y rankear + armar_listas
    sobre las features del notebook (cand_202603) deben reproducir exactamente sus puntajes y sus listas.
@@ -53,29 +54,23 @@ def _comparar(nuestro: pd.DataFrame, ref: pd.DataFrame, etapa: str, tol: dict[st
 
 
 # ---------------------------------------------------------------------------
-# 1. Paridad exacta contra la referencia del contenedor
+# 1. Paridad exacta contra la referencia del contenedor (muestra fija de empresas)
 # ---------------------------------------------------------------------------
-@con_referencia
-def test_paridad_retrieval(candidatos):
-    _comparar(candidatos, pd.read_parquet(REF / "candidatos.parquet"), "recuperar")
+@pytest.fixture(scope="module")
+def muestra_ml():
+    from tests.conftest import FECHA_CORTE
+    from tests.referencia.generar_referencia import correr
+
+    empresas = pd.read_parquet(REF / "muestra_empresas.parquet").proveedor_key
+    return correr(DATA, FECHA_CORTE, empresas=empresas)
 
 
 @con_referencia
-def test_paridad_features(puntuados_ml):
-    ref = pd.read_parquet(REF / "features.parquet")
-    _comparar(puntuados_ml[ref.columns], ref, "construir")
-
-
-@con_referencia
-def test_paridad_puntajes(puntuados_ml):
-    ref = pd.read_parquet(REF / "puntuados.parquet")
-    _comparar(puntuados_ml[ref.columns], ref, "rankear", tol={"s_v2": 1e-9, "p_gana": 1e-9})
-
-
-@con_referencia
-def test_paridad_listas(listas_ml):
-    ref = pd.read_parquet(REF / "listas.parquet")
-    _comparar(listas_ml[ref.columns], ref, "armar_listas", tol={"s_v2": 1e-9, "p_gana": 1e-9})
+@pytest.mark.parametrize("etapa", ["candidatos", "features", "puntuados", "listas"])
+def test_paridad_contra_referencia(etapa, muestra_ml):
+    ref = pd.read_parquet(REF / f"{etapa}.parquet")
+    tol = {"s_v2": 1e-9, "p_gana": 1e-9} if etapa in ("puntuados", "listas") else None
+    _comparar(muestra_ml[etapa][ref.columns], ref, etapa, tol)
 
 
 # ---------------------------------------------------------------------------

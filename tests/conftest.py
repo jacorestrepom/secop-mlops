@@ -37,16 +37,23 @@ def modelos():
 
 
 @pytest.fixture(scope="session")
-def candidatos(modelos):
-    """recuperar() sobre las tablas limpias, con las empresas y procesos que el notebook 03 usó en el mes."""
+def retrieval_ml(modelos):
+    """recuperar() sobre las tablas limpias, con las empresas y procesos que el notebook 03 usó en el mes.
+    Devuelve (candidatos, positivos del mes) para poder medir el Recall@150."""
     from ml.retrieval import HistoriaRetrieval, recuperar
 
     h = HistoriaRetrieval.desde_carpeta(DATA / "clean")
     empresas, procesos = h.entradas_del_mes(FECHA_CORTE)
     top = recuperar(empresas, procesos, FECHA_CORTE, historia=h, modelo=modelos["m1"])
+    positivos = h.positivos_del_mes(FECHA_CORTE)
     del h
     gc.collect()
-    return top
+    return top, positivos
+
+
+@pytest.fixture(scope="session")
+def candidatos(retrieval_ml):
+    return retrieval_ml[0]
 
 
 @pytest.fixture(scope="session")
@@ -70,6 +77,16 @@ def listas_ml(puntuados_ml):
     from ml.listas import armar_listas
 
     return armar_listas(puntuados_ml)
+
+
+@pytest.fixture(scope="session")
+def top_notebook():
+    """Candidatos del notebook 03 (puestos 1–150) traducidos a llaves, como la sección 6 del notebook final."""
+    top = pd.read_parquet(DATA / "retrieval_v2" / "top_retrieval" / f"top_{MES}.parquet",
+                          columns=["pk", "pid", "score_retrieval", "rank_retrieval", "es_frio"])
+    return (top[top.rank_retrieval <= 150]
+            .merge(pd.read_parquet(DATA / "clean" / "map_pk.parquet"), on="pk", how="left")
+            .merge(pd.read_parquet(DATA / "clean" / "map_pid.parquet"), on="pid", how="left").reset_index(drop=True))
 
 
 @pytest.fixture(scope="session")

@@ -321,6 +321,14 @@ class HistoriaRetrieval:
         activos = pos["pk"].unique()
         return list(self.empresas_idx.values[activos]), list(procm["id_proceso"].values)
 
+    def positivos_del_mes(self, mes):
+        """Pares (pk, pid) en que un usuario objetivo se presentó a un proceso publicado en el mes (para evaluar)."""
+        mes = pd.Timestamp(mes)
+        proc, proponentes = self.proc, self.proponentes
+        procm = proc[(proc["fecha_publicacion"] >= mes) & (proc["fecha_publicacion"] < mes + pd.offsets.MonthBegin(1))]
+        pos = proponentes.loc[proponentes["pid"].isin(procm["pid"]), ["pk", "pid"]].drop_duplicates()
+        return pos[pos["pk"].isin(self.objetivo)].reset_index(drop=True)
+
     def recuperar(self, empresas, procesos_abiertos, fecha_corte, modelo, k=C.K):
         """Top ``k`` candidatos por empresa con ``score_retrieval``, ``rank_retrieval`` y ``es_frio``.
 
