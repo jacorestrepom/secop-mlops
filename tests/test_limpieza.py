@@ -2,8 +2,9 @@
 
 Lee data/raw/*_20261104.parquet (snapshot de silver del 4-nov-2026), aplica ml.limpieza.limpiar y compara con
 data/clean/: mismos conteos por tabla y mismos valores en cada columna que produce el notebook 02. Las columnas de
-procesos que salen de una celda perdida (ml.limpieza.COLUMNAS_SIN_ORIGEN) se reportan aparte. Se salta si no hay
-SECOP_DATA_DIR/raw.
+procesos que salen de una celda perdida se reconstruyen (ml.limpieza.reconstruir_columnas) y se verifican igual;
+las que no se pudieron reconstruir exactas (ml.limpieza.COLUMNAS_SIN_ORIGEN) se excluyen y se
+documentan. Se salta si no hay SECOP_DATA_DIR/raw.
 """
 
 from __future__ import annotations
@@ -54,12 +55,15 @@ def test_limpieza_igual_a_clean(tabla, limpias):
     faltan = [c for c in ref.columns if c not in nuestra.columns and c not in COLUMNAS_SIN_ORIGEN]
     assert not faltan, f"{tabla}: columnas de clean que la limpieza no produce: {faltan}"
     nuestra = nuestra.reset_index(drop=True)
-    if tabla == "procesos":
-        # Regla de la celda perdida (no está en el notebook 02): precio_base < 1.000 → nulo
-        from ml.limpieza import PRECIO_MINIMO_SIN_ORIGEN
-
-        bajo = nuestra.precio_base < PRECIO_MINIMO_SIN_ORIGEN
-        assert ref.precio_base[bajo].isna().all()
-        nuestra = nuestra.assign(precio_base=nuestra.precio_base.mask(bajo))
     distintas = [c for c in ref.columns if c in nuestra.columns and not _iguales(nuestra[c], ref[c])]
     assert not distintas, f"{tabla}: columnas con valores distintos: {distintas}"
+
+
+def test_columnas_del_modelo_cubiertas():
+    """Toda columna de procesos que usa ml/ sale de silver por limpieza(), salvo las documentadas sin origen."""
+    from ml import config as C
+    from ml.limpieza import COLUMNAS_SIN_ORIGEN
+    from ml.retrieval import COLS_PROCESOS
+
+    usadas = set(C.COLS_Q) - {"fecha_corte"} | set(COLS_PROCESOS)
+    assert usadas & set(COLUMNAS_SIN_ORIGEN) == {"log_precio_base"}

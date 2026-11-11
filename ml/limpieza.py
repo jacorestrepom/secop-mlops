@@ -3,11 +3,14 @@
 Entrada: las cuatro tablas de silver tal como las consulta el notebook 02 (celdas 38, 39, 41 y 42; copia local
 en data/raw/*_20261104.parquet). Salida: procesos, proponentes, contratos y proveedores como en data/clean/.
 
-Lo que el notebook 02 NO genera y sí está en data/clean/procesos.parquet (sale de una celda que no quedó en ningún
-notebook, igual que base_entrenamiento y los mapas): log_precio_base, log_duracion_dias, tiene_lotes, proc_mes,
-proc_fin_de_anio, modalidad_grupo y las columnas *_cat. Este módulo no las inventa: ``COLUMNAS_SIN_ORIGEN``.
-Tampoco aplica la única regla de esa celda que se ve en los datos: en data/clean/procesos.parquet, precio_base
-< 1.000 queda nulo (353 procesos del snapshot del 4-nov). Ver ``PRECIO_MINIMO_SIN_ORIGEN``.
+data/clean/procesos.parquet tiene columnas que el notebook 02 NO genera: salen de una celda que no quedó en ningún
+notebook (igual que base_entrenamiento y los mapas). ``reconstruir_columnas`` reproduce las que usa el modelo y
+coinciden EXACTAMENTE con data/clean en las 618.536 filas (NaN = NaN):
+    precio_base < 1.000 → nulo · log_duracion_dias · tiene_lotes · proc_mes · proc_fin_de_anio
+Las demás quedan en ``COLUMNAS_SIN_ORIGEN``:
+    log_precio_base: log1p(precio_base) coincide en 618.525 filas; 11 difieren en 1 ulp (~3,6e-15), probablemente
+        por la librería matemática de la máquina donde se generó. El modelo la usa: la decide ciencia de datos.
+    modalidad_grupo y *_cat: el modelo no las usa; solo se documentan.
 """
 
 from __future__ import annotations
@@ -15,16 +18,17 @@ from __future__ import annotations
 import re
 import unicodedata
 
+import numpy as np
 import pandas as pd
 
 ESTADOS_EXPERIENCIA = ["En ejecución", "Cerrado", "Modificado", "terminado",
                        "Aprobado", "Suspendido", "Prorrogado"]  # filtro de contratos (se aplica en la consulta)
 TIPOS_CONTRATO = ["Prestación de servicios", "Suministros", "Compraventa", "Obra",
                   "Decreto 092 de 2017", "Consultoría", "Interventoría", "Seguros"]
-COLUMNAS_SIN_ORIGEN = ["log_precio_base", "log_duracion_dias", "tiene_lotes", "proc_mes", "proc_fin_de_anio",
-                       "modalidad_grupo", "sector_entidad_cat", "unspsc_segmento_cat", "unspsc_familia_cat",
-                       "departamento_entidad_cat"]
-PRECIO_MINIMO_SIN_ORIGEN = 1_000  # regla observada en data/clean, no está en el notebook 02
+COLUMNAS_RECONSTRUIDAS = ["log_duracion_dias", "tiene_lotes", "proc_mes", "proc_fin_de_anio"]
+COLUMNAS_SIN_ORIGEN = ["log_precio_base", "modalidad_grupo", "sector_entidad_cat", "unspsc_segmento_cat",
+                       "unspsc_familia_cat", "departamento_entidad_cat"]
+PRECIO_MINIMO = 1_000
 COLS_FECHA = {
     "procesos": ["fecha_publicacion", "fecha_adjudicacion", "fecha_limite_ofertas"],
     "proponentes": ["fecha_publicacion"],
@@ -93,6 +97,18 @@ def limpiar_procesos(procesos: pd.DataFrame) -> pd.DataFrame:
     return proc
 
 
+def reconstruir_columnas(proc: pd.DataFrame) -> pd.DataFrame:
+    """Reconstruida desde data/clean y verificada en 618.536 filas; la celda original se perdió."""
+    proc = proc.copy()
+    proc["precio_base"] = proc["precio_base"].mask(proc["precio_base"] < PRECIO_MINIMO)
+    proc["log_duracion_dias"] = np.log1p(proc["duracion_dias"].astype("Float64"))
+    proc["tiene_lotes"] = (proc["numero_lotes"] > 0).astype(np.int64)
+    fp = pd.to_datetime(proc["fecha_publicacion"])
+    proc["proc_mes"] = fp.dt.month.astype(np.int32)
+    proc["proc_fin_de_anio"] = fp.dt.month.isin([12, 1]).astype(np.int64)  # diciembre y enero
+    return proc
+
+
 def controles(proc, proponentes, contratos, prov) -> dict[str, bool]:
     """Celda 49: controles de integridad."""
     return {"id_proceso único en procesos": bool(proc["id_proceso"].is_unique),
@@ -105,7 +121,7 @@ def controles(proc, proponentes, contratos, prov) -> dict[str, bool]:
 
 def limpiar(procesos, proponentes, contratos, proveedores) -> dict[str, pd.DataFrame]:
     """Secciones 8 a 10: las cuatro tablas limpias, con las fechas convertidas (celda 52)."""
-    out = {"procesos": limpiar_procesos(procesos), "proponentes": proponentes.copy(),
+    out = {"procesos": reconstruir_columnas(limpiar_procesos(procesos)), "proponentes": proponentes.copy(),
            "contratos": contratos.copy(), "proveedores": limpiar_proveedores(proveedores, procesos)}
     for nombre, cols in COLS_FECHA.items():
         for c in cols:
