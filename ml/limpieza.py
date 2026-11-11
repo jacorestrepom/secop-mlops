@@ -7,10 +7,8 @@ data/clean/procesos.parquet tiene columnas que el notebook 02 NO genera: salen d
 notebook (igual que base_entrenamiento y los mapas). ``reconstruir_columnas`` reproduce las que usa el modelo y
 coinciden EXACTAMENTE con data/clean en las 618.536 filas (NaN = NaN):
     precio_base < 1.000 → nulo · log_duracion_dias · tiene_lotes · proc_mes · proc_fin_de_anio
-Las demás quedan en ``COLUMNAS_SIN_ORIGEN``:
-    log_precio_base: log1p(precio_base) coincide en 618.525 filas; 11 difieren en 1 ulp (~3,6e-15), probablemente
-        por la librería matemática de la máquina donde se generó. El modelo la usa: la decide ciencia de datos.
-    modalidad_grupo y *_cat: el modelo no las usa; solo se documentan.
+y log_precio_base (618.525 filas exactas; 11 difieren en 1 ulp por la libm de la máquina donde se generó clean).
+Quedan en ``COLUMNAS_SIN_ORIGEN`` solo las que el modelo no usa (modalidad_grupo y *_cat): se documentan.
 """
 
 from __future__ import annotations
@@ -25,8 +23,8 @@ ESTADOS_EXPERIENCIA = ["En ejecución", "Cerrado", "Modificado", "terminado",
                        "Aprobado", "Suspendido", "Prorrogado"]  # filtro de contratos (se aplica en la consulta)
 TIPOS_CONTRATO = ["Prestación de servicios", "Suministros", "Compraventa", "Obra",
                   "Decreto 092 de 2017", "Consultoría", "Interventoría", "Seguros"]
-COLUMNAS_RECONSTRUIDAS = ["log_duracion_dias", "tiene_lotes", "proc_mes", "proc_fin_de_anio"]
-COLUMNAS_SIN_ORIGEN = ["log_precio_base", "modalidad_grupo", "sector_entidad_cat", "unspsc_segmento_cat",
+COLUMNAS_RECONSTRUIDAS = ["log_precio_base", "log_duracion_dias", "tiene_lotes", "proc_mes", "proc_fin_de_anio"]
+COLUMNAS_SIN_ORIGEN = ["modalidad_grupo", "sector_entidad_cat", "unspsc_segmento_cat",
                        "unspsc_familia_cat", "departamento_entidad_cat"]
 PRECIO_MINIMO = 1_000
 COLS_FECHA = {
@@ -101,6 +99,9 @@ def reconstruir_columnas(proc: pd.DataFrame) -> pd.DataFrame:
     """Reconstruida desde data/clean y verificada en 618.536 filas; la celda original se perdió."""
     proc = proc.copy()
     proc["precio_base"] = proc["precio_base"].mask(proc["precio_base"] < PRECIO_MINIMO)
+    # Reconstruida y verificada: 618.525 filas exactas, 11 difieren en 1 ulp (≤ 3,6e-15) por la libm de la máquina
+    # donde se generó clean.
+    proc["log_precio_base"] = np.log1p(proc["precio_base"])
     proc["log_duracion_dias"] = np.log1p(proc["duracion_dias"].astype("Float64"))
     proc["tiene_lotes"] = (proc["numero_lotes"] > 0).astype(np.int64)
     fp = pd.to_datetime(proc["fecha_publicacion"])

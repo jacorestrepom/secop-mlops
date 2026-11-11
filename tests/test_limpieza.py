@@ -55,7 +55,10 @@ def test_limpieza_igual_a_clean(tabla, limpias):
     faltan = [c for c in ref.columns if c not in nuestra.columns and c not in COLUMNAS_SIN_ORIGEN]
     assert not faltan, f"{tabla}: columnas de clean que la limpieza no produce: {faltan}"
     nuestra = nuestra.reset_index(drop=True)
-    distintas = [c for c in ref.columns if c in nuestra.columns and not _iguales(nuestra[c], ref[c])]
+    distintas = [c for c in ref.columns if c in nuestra.columns and not _iguales(nuestra[c], ref[c])
+                 and not (c == "log_precio_base"  # 11 filas difieren en 1 ulp (libm de la máquina que generó clean)
+                          and np.allclose(nuestra[c].to_numpy(float), ref[c].to_numpy(float),
+                                          rtol=0, atol=1e-12, equal_nan=True))]
     assert not distintas, f"{tabla}: columnas con valores distintos: {distintas}"
 
 
@@ -66,4 +69,4 @@ def test_columnas_del_modelo_cubiertas():
     from ml.retrieval import COLS_PROCESOS
 
     usadas = set(C.COLS_Q) - {"fecha_corte"} | set(COLS_PROCESOS)
-    assert usadas & set(COLUMNAS_SIN_ORIGEN) == {"log_precio_base"}
+    assert not usadas & set(COLUMNAS_SIN_ORIGEN)
