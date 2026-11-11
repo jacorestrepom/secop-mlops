@@ -1,7 +1,13 @@
-# Imagen secop-api. Se construye desde la raíz del repo:  docker build -f api/Dockerfile -t secop-api .
+# Imagen secop-api. Se construye desde la raíz del repo:
+#   docker build --platform linux/amd64 --provenance=false -f api/Dockerfile -t secop-api .
+# La misma imagen corre en Docker (docker-compose) y en AWS Lambda: la extensión Lambda Web Adapter
+# solo se activa dentro de Lambda y le pasa las peticiones a uvicorn por el puerto 8000.
 FROM python:3.11-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
+    AWS_LWA_PORT=8000 AWS_LWA_READINESS_CHECK_PATH=/health
 WORKDIR /app
 
 COPY requirements-api.txt .
