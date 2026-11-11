@@ -32,7 +32,15 @@ EXPERIMENTO = "secop-registro-v1"
 ALIAS = "production"
 CORTE_ENTRENAMIENTO = "2025-06"
 PERIODO_PRUEBA = "2025-07 a 2026-07"
-SILVER_SNAPSHOT_ID = "pendiente-camilo"
+# Snapshot de silver (Iceberg) con el que se entrenaron y evaluaron los modelos (confirmado por ML, 2026-11-04)
+SILVER_SNAPSHOT = {
+    "silver_snapshot_procesos": "5704566866417056960",
+    "silver_snapshot_proponentes": "2911693562262410165",
+    "silver_snapshot_contratos": "528333321308876835",
+    "silver_snapshot_proveedores": "7035817432963350399",
+    "silver_snapshot_fecha": "2026-11-04",
+    "silver_copia": "s3://proyecto-integrador-bucket-01/handoff/raw/",
+}
 TOLERANCIA = 1e-9
 
 # Recall@150 de prueba del M1 (notebook 03, sección 9; data/retrieval_v2/test/test_AAAAMM.parquet,
@@ -218,7 +226,7 @@ def registrar(d: Path) -> None:
             mlflow.set_tags(
                 {
                     "git_commit": commit,
-                    "silver_snapshot_id": SILVER_SNAPSHOT_ID,
+                    **SILVER_SNAPSHOT,
                     "proyecto": "secop",
                     "fuente": f"s3://{BUCKET}/{PREFIJO}/{m['archivo']}",
                     "sha256_modelo": sha256(ruta),
@@ -237,7 +245,8 @@ def registrar(d: Path) -> None:
             version = info.registered_model_version
             cliente.update_registered_model(nombre, description=m["descripcion"])
             cliente.set_model_version_tag(nombre, version, "git_commit", commit)
-            cliente.set_model_version_tag(nombre, version, "silver_snapshot_id", SILVER_SNAPSHOT_ID)
+            for clave, valor in SILVER_SNAPSHOT.items():
+                cliente.set_model_version_tag(nombre, version, clave, valor)
             cliente.set_registered_model_alias(nombre, ALIAS, version)
             print(
                 f"{nombre}: versión {version} (run {run.info.run_id}) → alias {ALIAS} | "

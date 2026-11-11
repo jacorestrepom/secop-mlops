@@ -6,6 +6,10 @@ from typing import Protocol
 from api.esquemas import Empresa, Estadistica, Metadata, Proceso, Recomendaciones
 
 
+class SinPublicacion(RuntimeError):
+    """Todavía no hay ninguna publicación vigente (la API responde 503)."""
+
+
 class FuenteDatos(Protocol):
     nombre: str
 

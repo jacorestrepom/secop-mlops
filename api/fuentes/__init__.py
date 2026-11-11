@@ -1,6 +1,6 @@
 import os
 
-from api.fuentes.base import FuenteDatos
+from api.fuentes.base import FuenteDatos, SinPublicacion  # noqa: F401
 
 
 def crear_fuente() -> FuenteDatos:
@@ -10,4 +10,8 @@ def crear_fuente() -> FuenteDatos:
         from api.fuentes.simulada import FuenteSimulada
 
         return FuenteSimulada()
-    raise ValueError(f"FUENTE_DATOS desconocida: {tipo!r} (por ahora solo 'simulada')")
+    if tipo == "rds":
+        from api.fuentes.rds import FuenteRDS
+
+        return FuenteRDS()
+    raise ValueError(f"FUENTE_DATOS desconocida: {tipo!r} (usa 'simulada' o 'rds')")
