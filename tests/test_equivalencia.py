@@ -49,8 +49,9 @@ def metricas(listas, candidatos, positivos, prop_m) -> dict[str, float]:
     from ml.evaluacion import metricas_lista1, pct_plausibles, recall_retrieval
 
     m = {"Recall@150 retrieval": recall_retrieval(candidatos, positivos)}
-    m.update({k: v for k, v in metricas_lista1(listas[listas.lista == "historial"], prop_m, MES).items()
-              if k != "empresas"})
+    m.update(
+        {k: v for k, v in metricas_lista1(listas[listas.lista == "historial"], prop_m, MES).items() if k != "empresas"}
+    )
     m["% plausibles lista 2"] = pct_plausibles(listas[listas.lista == "oportunidad"], prop_m, MES) / 100
     return m
 
@@ -59,8 +60,9 @@ def metricas(listas, candidatos, positivos, prop_m) -> dict[str, float]:
 def test_componentes_listas_coinciden(lista, listas_componentes, listas_notebook):
     from ml.evaluacion import coincidencia_por_empresa
 
-    c = coincidencia_por_empresa(listas_componentes[listas_componentes.lista == lista],
-                                 listas_notebook[listas_notebook.lista == lista])
+    c = coincidencia_por_empresa(
+        listas_componentes[listas_componentes.lista == lista], listas_notebook[listas_notebook.lista == lista]
+    )
     print(f"\n[componentes] lista {lista}: {c:.2%} de empresas con la misma lista")
     assert c >= MIN_COINCIDENCIA, f"lista {lista}: {c:.2%} de empresas con la misma lista (mín. {MIN_COINCIDENCIA:.0%})"
 

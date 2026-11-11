@@ -15,5 +15,9 @@ select = ["E", "F", "I", "B", "UP"]
 # Código copiado línea por línea de los notebooks (para poder compararlo con un diff)
 "ml/*" = ["E501"]
 
+[tool.ruff.format]
+# ml/ conserva el formato de los notebooks, línea por línea, para poder compararlo con un diff
+exclude = ["ml/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

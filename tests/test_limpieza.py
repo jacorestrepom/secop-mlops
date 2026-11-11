@@ -15,8 +15,10 @@ import pytest
 
 from tests.conftest import DATA
 
-pytestmark = pytest.mark.skipif(DATA is None or not (DATA / "raw" / "procesos_20261104.parquet").exists(),
-                                reason="no hay SECOP_DATA_DIR/raw/*_20261104.parquet")
+pytestmark = pytest.mark.skipif(
+    DATA is None or not (DATA / "raw" / "procesos_20261104.parquet").exists(),
+    reason="no hay SECOP_DATA_DIR/raw/*_20261104.parquet",
+)
 TABLAS = ["procesos", "proponentes", "contratos", "proveedores"]
 
 
@@ -40,8 +42,13 @@ def _iguales(a: pd.Series, b: pd.Series) -> bool:
 def test_controles_de_integridad(limpias):
     from ml.limpieza import controles
 
-    malos = [k for k, ok in controles(limpias["procesos"], limpias["proponentes"], limpias["contratos"],
-                                      limpias["proveedores"]).items() if not ok]
+    malos = [
+        k
+        for k, ok in controles(
+            limpias["procesos"], limpias["proponentes"], limpias["contratos"], limpias["proveedores"]
+        ).items()
+        if not ok
+    ]
     assert not malos, f"controles que fallan: {malos}"
 
 
@@ -55,10 +62,16 @@ def test_limpieza_igual_a_clean(tabla, limpias):
     faltan = [c for c in ref.columns if c not in nuestra.columns and c not in COLUMNAS_SIN_ORIGEN]
     assert not faltan, f"{tabla}: columnas de clean que la limpieza no produce: {faltan}"
     nuestra = nuestra.reset_index(drop=True)
-    distintas = [c for c in ref.columns if c in nuestra.columns and not _iguales(nuestra[c], ref[c])
-                 and not (c == "log_precio_base"  # 11 filas difieren en 1 ulp (libm de la máquina que generó clean)
-                          and np.allclose(nuestra[c].to_numpy(float), ref[c].to_numpy(float),
-                                          rtol=0, atol=1e-12, equal_nan=True))]
+    distintas = [
+        c
+        for c in ref.columns
+        if c in nuestra.columns
+        and not _iguales(nuestra[c], ref[c])
+        and not (
+            c == "log_precio_base"  # 11 filas difieren en 1 ulp (libm de la máquina que generó clean)
+            and np.allclose(nuestra[c].to_numpy(float), ref[c].to_numpy(float), rtol=0, atol=1e-12, equal_nan=True)
+        )
+    ]
     assert not distintas, f"{tabla}: columnas con valores distintos: {distintas}"
 
 

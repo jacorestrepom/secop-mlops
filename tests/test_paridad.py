@@ -29,8 +29,9 @@ from tests.conftest import DATA, MES, sin_datos
 pytestmark = sin_datos
 
 REF = Path(os.environ["SECOP_REFERENCIA_DIR"]) / MES if os.environ.get("SECOP_REFERENCIA_DIR") else None
-con_referencia = pytest.mark.skipif(REF is None or not REF.is_dir(),
-                                    reason="SECOP_REFERENCIA_DIR no está definido o no tiene la carpeta del mes")
+con_referencia = pytest.mark.skipif(
+    REF is None or not REF.is_dir(), reason="SECOP_REFERENCIA_DIR no está definido o no tiene la carpeta del mes"
+)
 
 
 def _iguales(a: pd.Series, b: pd.Series) -> bool:

@@ -4,11 +4,12 @@ import os
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from api.esquemas import Empresa, Estadistica, Metadata, Proceso, Recomendaciones, Salud
-from api.fuentes import FuenteDatos, crear_fuente
+from api.fuentes import FuenteDatos, SinPublicacion, crear_fuente
 
 app = FastAPI(
     title="Recomendador SECOP",
@@ -26,6 +27,11 @@ app.add_middleware(
     allow_methods=["GET"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(SinPublicacion)
+def sin_publicacion(_: Request, e: SinPublicacion) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"detail": str(e)})
 
 
 @lru_cache

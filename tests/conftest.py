@@ -1,6 +1,11 @@
-"""Fixtures compartidas por las pruebas que usan datos reales (paridad y equivalencia).
+"""Fixtures compartidas de las pruebas.
 
-Variables de entorno (si falta SECOP_DATA_DIR, esas pruebas se saltan):
+1. Base PostgreSQL para las pruebas de publicación y de la fuente RDS. Se activa con TEST_DATABASE_URL (en CI lo
+   pone el servicio postgres del workflow). En local:
+    docker run -d --name secop-pg-prueba -e POSTGRES_PASSWORD=prueba -e POSTGRES_DB=secop -p 55432:5432 postgres:16
+    export TEST_DATABASE_URL=postgresql://postgres:prueba@localhost:55432/secop
+
+2. Datos reales del modelo (paridad, equivalencia y limpieza). Si falta SECOP_DATA_DIR, esas pruebas se saltan:
     SECOP_DATA_DIR      carpeta data/ con clean/, retrieval_v2/ y final/
     SECOP_MODELOS_DIR   (opcional) carpeta con g1_pgana.txt, ranking_v2_final.txt y M1_final_unico.txt;
                         por defecto data/final/modelos/ y data/retrieval_v2/
@@ -14,6 +19,36 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+
+# --------------------------------------------------------------------------
+# 1. PostgreSQL
+# --------------------------------------------------------------------------
+
+
+RAIZ = Path(__file__).resolve().parent.parent
+SQL_SERVING = RAIZ / "infra" / "sql" / "serving.sql"
+SIMULADOS = RAIZ / "api" / "datos_simulados.json"
+
+
+@pytest.fixture
+def pg_dsn():
+    """DSN de una base con el esquema serving recién creado (vacío)."""
+    dsn = os.environ.get("TEST_DATABASE_URL")
+    if not dsn:
+        pytest.skip("TEST_DATABASE_URL no está definido")
+    psycopg2 = pytest.importorskip("psycopg2")
+    con = psycopg2.connect(dsn)
+    con.autocommit = True
+    with con.cursor() as cur:
+        cur.execute("DROP SCHEMA IF EXISTS serving CASCADE")
+        cur.execute(SQL_SERVING.read_text())
+    con.close()
+    return dsn
+
+
+# --------------------------------------------------------------------------
+# 2. Datos reales del modelo
+# --------------------------------------------------------------------------
 
 MES = "202603"
 FECHA_CORTE = "2026-03-01"
@@ -31,9 +66,11 @@ def _ruta_modelo(nombre: str, por_defecto: Path) -> Path:
 
 @pytest.fixture(scope="session")
 def modelos():
-    return {"m1": _ruta_modelo("M1_final_unico.txt", DATA / "retrieval_v2"),
-            "g1": _ruta_modelo("g1_pgana.txt", DATA / "final" / "modelos"),
-            "v2": _ruta_modelo("ranking_v2_final.txt", DATA / "final" / "modelos")}
+    return {
+        "m1": _ruta_modelo("M1_final_unico.txt", DATA / "retrieval_v2"),
+        "g1": _ruta_modelo("g1_pgana.txt", DATA / "final" / "modelos"),
+        "v2": _ruta_modelo("ranking_v2_final.txt", DATA / "final" / "modelos"),
+    }
 
 
 @pytest.fixture(scope="session")
@@ -82,11 +119,16 @@ def listas_ml(puntuados_ml):
 @pytest.fixture(scope="session")
 def top_notebook():
     """Candidatos del notebook 03 (puestos 1–150) traducidos a llaves, como la sección 6 del notebook final."""
-    top = pd.read_parquet(DATA / "retrieval_v2" / "top_retrieval" / f"top_{MES}.parquet",
-                          columns=["pk", "pid", "score_retrieval", "rank_retrieval", "es_frio"])
-    return (top[top.rank_retrieval <= 150]
-            .merge(pd.read_parquet(DATA / "clean" / "map_pk.parquet"), on="pk", how="left")
-            .merge(pd.read_parquet(DATA / "clean" / "map_pid.parquet"), on="pid", how="left").reset_index(drop=True))
+    top = pd.read_parquet(
+        DATA / "retrieval_v2" / "top_retrieval" / f"top_{MES}.parquet",
+        columns=["pk", "pid", "score_retrieval", "rank_retrieval", "es_frio"],
+    )
+    return (
+        top[top.rank_retrieval <= 150]
+        .merge(pd.read_parquet(DATA / "clean" / "map_pk.parquet"), on="pk", how="left")
+        .merge(pd.read_parquet(DATA / "clean" / "map_pid.parquet"), on="pid", how="left")
+        .reset_index(drop=True)
+    )
 
 
 @pytest.fixture(scope="session")

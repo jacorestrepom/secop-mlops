@@ -14,7 +14,9 @@ Escribe en --salida/AAAAMM/:
     listas.parquet            armar_listas()
     sha256.txt                huella de cada parquet (dos corridas deben dar lo mismo)
 
-La referencia NO va al repo: se sube a S3 y el CI la descarga (SECOP_REFERENCIA_DIR).
+La referencia NO va al repo: se genera en Fargate (4 vCPU / 30 GB) durante la ronda de score.py, dos veces para
+comprobar que sha256.txt es idéntico, y se sube a S3; el CI la descarga (SECOP_REFERENCIA_DIR). Piso de memoria
+medido, sin importar el tamaño de la muestra: 6,5 GB (HistoriaRetrieval) y 9,2 GB de pico (Historia). Ver README.md.
 """
 
 from __future__ import annotations
@@ -61,8 +63,9 @@ def correr(data: Path, mes, empresas=None, n=300, log=print) -> dict[str, pd.Dat
     h = HistoriaRetrieval.desde_carpeta(data / "clean")
     muestra = elegir_muestra(h, mes, n) if empresas is None else pd.DataFrame({"proveedor_key": list(empresas)})
     _, procesos = h.entradas_del_mes(mes)
-    cand = recuperar(muestra.proveedor_key, procesos, mes, historia=h,
-                     modelo=data / "retrieval_v2" / "M1_final_unico.txt")
+    cand = recuperar(
+        muestra.proveedor_key, procesos, mes, historia=h, modelo=data / "retrieval_v2" / "M1_final_unico.txt"
+    )
     del h
     gc.collect()
     log(f"recuperar: {len(cand):,} pares de {cand.pk.nunique()} empresas | {time.time() - t0:.0f} s")
@@ -77,9 +80,13 @@ def correr(data: Path, mes, empresas=None, n=300, log=print) -> dict[str, pd.Dat
     punt = rankear(feats, g1=modelos / "g1_pgana.txt", v2=modelos / "ranking_v2_final.txt")
     listas = armar_listas(punt)
     log(f"listas: {len(listas):,} filas | {time.time() - t0:.0f} s")
-    return {"muestra_empresas": muestra, "candidatos": cand, "features": feats,
-            "puntuados": punt[LLAVES + ["s_v2", "p_gana"]],
-            "listas": listas[LLAVES + COLS_LISTAS].reset_index(drop=True)}
+    return {
+        "muestra_empresas": muestra,
+        "candidatos": cand,
+        "features": feats,
+        "puntuados": punt[LLAVES + ["s_v2", "p_gana"]],
+        "listas": listas[LLAVES + COLS_LISTAS].reset_index(drop=True),
+    }
 
 
 def main() -> None:
