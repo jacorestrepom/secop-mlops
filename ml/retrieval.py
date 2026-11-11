@@ -60,7 +60,10 @@ def perfil(hist, llave):
 
 
 def textos_de(p):
-    return (p.dropna(subset=["descripcion_limpia"]).sort_values("fecha_publicacion")
+    # Desempate fijo (aprobado por ciencia de datos): el notebook usaba sort_values("fecha_publicacion"), que no es
+    # estable; con fechas empatadas, los 50 textos elegidos dependían de la plataforma. Ahora: fecha y luego id_proceso.
+    return (p.dropna(subset=["descripcion_limpia"])
+              .sort_values(["fecha_publicacion", "id_proceso"], kind="mergesort")
               .groupby("pk")["descripcion_limpia"].apply(lambda s: " ".join(s.tail(50))))
 
 
@@ -113,7 +116,7 @@ class HistoriaRetrieval:
         proc["pid"] = np.arange(len(proc))
         proponentes["pid"] = pd.Index(proc["id_proceso"]).get_indexer(proponentes["id_proceso"])
 
-        part_all = proponentes[["pk", "pid", "fecha_publicacion"]].merge(
+        part_all = proponentes[["pk", "pid", "fecha_publicacion", "id_proceso"]].merge(
             proc[["pid", "descripcion_limpia"] + ATTRS], on="pid", how="left")
 
         # ---------- 2. TF-IDF de descripciones (solo procesos antes de 2025) ----------
