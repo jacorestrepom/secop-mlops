@@ -1,16 +1,18 @@
 """Origen RDS: lee el esquema serving de PostgreSQL, siempre la publicación vigente (es_actual).
 
 Conexión por variables de entorno: DATABASE_URL, o DB_HOST / DB_PORT / DB_NAME / DB_USER / DB_PASSWORD
-(DB_SSLMODE, por defecto require). El pool se crea una sola vez por proceso (la fuente se cachea en main.py).
+(DB_SSLMODE, por defecto require). El pool (Conexiones) se crea una sola vez por proceso: la fuente se cachea
+en main.py.
 """
 
 import os
+import threading
+import time
 import unicodedata
 from contextlib import contextmanager
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from psycopg2.pool import ThreadedConnectionPool
 
 from api.esquemas import (
     TITULO_HISTORIAL,
@@ -50,39 +52,69 @@ def dsn_desde_entorno() -> str:
     )
 
 
+class Conexiones:
+    """Pool pequeño: abre conexiones solo cuando hacen falta (la API arranca aunque la base esté caída) y las
+    guarda para reutilizarlas. Si una lleva más de PING_TRAS segundos sin usarse (p. ej. la Lambda estuvo
+    congelada), la comprueba antes de entregarla y la cambia si murió."""
+
+    PING_TRAS = 30.0
+
+    def __init__(self, dsn: str, maximo: int = 4):
+        self._dsn, self._maximo = dsn, maximo
+        self._libres: list[tuple[object, float]] = []  # (conexión, último uso)
+        self._lock = threading.Lock()
+
+    def _nueva(self):
+        con = psycopg2.connect(self._dsn)
+        con.autocommit = True
+        return con
+
+    def tomar(self):
+        while True:
+            with self._lock:
+                con, ultimo = self._libres.pop() if self._libres else (None, 0.0)
+            if con is None:
+                return self._nueva()
+            if con.closed:
+                continue
+            if time.monotonic() - ultimo < self.PING_TRAS:
+                return con
+            try:
+                with con.cursor() as cur:
+                    cur.execute("SELECT 1")
+                return con
+            except psycopg2.Error:
+                con.close()
+
+    def devolver(self, con, rota: bool = False) -> None:
+        if rota or con.closed:
+            con.close()
+            return
+        with self._lock:
+            if len(self._libres) < self._maximo:
+                self._libres.append((con, time.monotonic()))
+                return
+        con.close()
+
+
 class FuenteRDS:
     nombre = "rds"
 
     def __init__(self, dsn: str | None = None, maxconn: int = 4):
-        self._pool = ThreadedConnectionPool(0, maxconn, dsn or dsn_desde_entorno())
-
-    def _conexion_viva(self):
-        """Saca una conexión del pool y comprueba que siga viva; si murió (p. ej. tras congelarse la Lambda),
-        la descarta y prueba con otra (una vez)."""
-        for intento in (1, 2):
-            con = self._pool.getconn()
-            try:
-                con.autocommit = True
-                with con.cursor() as cur:
-                    cur.execute("SELECT 1")
-                return con
-            except (psycopg2.OperationalError, psycopg2.InterfaceError):
-                self._pool.putconn(con, close=True)
-                if intento == 2:
-                    raise
+        self._pool = Conexiones(dsn or dsn_desde_entorno(), maxconn)
 
     @contextmanager
     def _cursor(self):
-        con = self._conexion_viva()
-        roto = False
+        con = self._pool.tomar()
+        rota = False
         try:
             with con.cursor(cursor_factory=RealDictCursor) as cur:
                 yield cur
         except (psycopg2.OperationalError, psycopg2.InterfaceError):
-            roto = True
+            rota = True
             raise
         finally:
-            self._pool.putconn(con, close=roto)
+            self._pool.devolver(con, rota)
 
     def _consulta(self, sql: str, params: tuple = ()) -> list[dict]:
         with self._cursor() as cur:

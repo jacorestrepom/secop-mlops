@@ -100,3 +100,13 @@ def test_health_degradado_si_la_base_no_responde():
         "fuente_datos": "rds",
         "base_datos": "error",
     }
+
+
+def test_reutiliza_la_conexion(pg_dsn, rds):
+    """Cada consulta no debe abrir una conexión nueva (en Lambda eso suma ~60 ms de SSL por consulta)."""
+    P.publicar(pg_dsn, P.desde_simulados(str(SIMULADOS)))
+    c = cliente_con(rds)
+    for _ in range(5):
+        c.get("/empresas/900123456/recomendaciones")
+    pids = {rds._consulta("SELECT pg_backend_pid() AS p")[0]["p"] for _ in range(10)}
+    assert len(pids) == 1
