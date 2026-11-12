@@ -22,3 +22,6 @@ __pycache__/
 
 # Sistema
 .DS_Store
+
+# Plan B: volcados locales de la demo (datos, no código)
+infra/demo/

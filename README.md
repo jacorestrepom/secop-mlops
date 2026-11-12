@@ -20,7 +20,7 @@ uv venv --python 3.11 .venv && uv pip install --python .venv/bin/python -r requi
 .venv/bin/uvicorn api.main:app --reload
 ```
 
-O con Docker: `docker compose -f infra/docker-compose.yml up --build` (es la misma imagen que corre en Lambda). La documentación queda en http://localhost:8000/docs.
+Con Docker y datos reales: ver [Plan B de la demo](#plan-b-de-la-demo-sin-aws). La documentación queda en http://localhost:8000/docs.
 
 `FUENTE_DATOS` elige de dónde salen los datos: `simulada` (por defecto, `api/datos_simulados.json`, inventados con el formato exacto del contrato) o `rds` (el esquema `serving`; conexión con `DATABASE_URL` o `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`).
 
@@ -150,6 +150,20 @@ Opciones de `score.py`: `--sin-publicar` (calcula todo y no publica), `--muestra
 - **En push a `main`:** lo mismo y, si pasa, build `linux/amd64` → ECR `secop-api:<hash corto>` y `secop-jobs:<hash corto>` (una etiqueta existente de `secop-jobs` no se reescribe) → `update-function-code` de la Lambda → comprueba que `/health` responda `base_datos: ok`. La task definition `secop-score` apunta a una etiqueta fija de `secop-jobs`: cambiar la imagen del job es registrar una revisión nueva, probarla y actualizar la Step Functions.
 - Credenciales por **OIDC**: el rol `secop-github-deploy` solo lo puede asumir `jacorestrepom/secop-mlops` desde `refs/heads/main`, y solo puede subir imágenes a `secop-api`/`secop-jobs` y actualizar el código de `secop-api`. No hay llaves en GitHub; el workflow solo usa la variable del repo `AWS_ACCOUNT_ID`.
 
+## Plan B de la demo (sin AWS)
+
+Si la nube falla el día de la presentación, la API corre en un portátil con una copia de la publicación vigente. Requiere Docker y el perfil `secop` de AWS solo para bajar el volcado.
+
+```bash
+./infra/exportar_demo.sh     # (con internet, antes de la demo) vuelca la publicación vigente a s3://…/demo/
+./infra/cargar_demo.sh       # baja el volcado más reciente y levanta PostgreSQL + API en local
+open http://localhost:8000/docs
+```
+
+- [`infra/exportar_demo.sh`](infra/exportar_demo.sh) enciende la EC2 `secop-mlflow` (la única que llega a RDS), hace allí un `pg_dump` del esquema `serving` con **solo la publicación vigente** (`COPY … WHERE version_id = <actual>`) y lo sube a `s3://proyecto-integrador-bucket-01/demo/serving_<fecha_corte>.sql.gz`. Apaga la EC2 al terminar, aunque falle.
+- [`infra/cargar_demo.sh`](infra/cargar_demo.sh) deja el volcado en `infra/demo/` (no va a Git) y levanta [`infra/docker-compose.yml`](infra/docker-compose.yml): PostgreSQL 16 lo carga al crear su volumen, y la API (misma imagen que Lambda) lee de ahí con `FUENTE_DATOS=rds`. Sin internet, se le puede pasar un volcado ya bajado: `./infra/cargar_demo.sh serving_2026-11-11.sql.gz`.
+- Probado el 2026-11-12: volcado de 24 MB (39.923 empresas, 436 procesos, 454.476 recomendaciones), carga en ~1 min, y la misma recomendación que la API en la nube. Detener: `docker compose -f infra/docker-compose.yml down`.
+
 ## Pruebas
 
 ```bash
@@ -194,4 +208,4 @@ TEST_DATABASE_URL=postgresql://postgres:prueba@localhost:55432/secop .venv/bin/p
 - [x] GitHub Actions: lint, tests, build y despliegue (API y job)
 - [ ] Reporte de drift diario en S3
 - [ ] Reentrenamiento de punta a punta con compuerta de promoción
-- [ ] Plan B con docker-compose probado en un portátil
+- [x] Plan B con docker-compose probado en un portátil (volcado de la publicación vigente desde RDS + API local)
