@@ -4,7 +4,7 @@ Servicio del recomendador SECOP: cada noche calcula las dos listas de cada empre
 
 ```
 api/     FastAPI: rutas, esquemas Pydantic (contrato con la web) y orígenes de datos (simulada / rds)
-jobs/    score.py (job nocturno), publicar.py (publicación atómica), registrar_v1.py (MLflow), referencia.py; drift.py pendiente
+jobs/    score.py (job nocturno + métricas + drift), publicar.py, registrar_v1.py, promover.py (compuerta), referencia.py, ingesta_recientes.py (sin desplegar)
 ml/      paquete del modelo: features, retrieval, ranking, listas (PR de ML)
 infra/   sql/serving.sql, jobs.Dockerfile (imagen secop-jobs), stepfunctions/secop-nocturno.asl.json, docker-compose (plan B)
 tests/   API (simulada y RDS), publicación atómica y paridad del modelo
@@ -157,6 +157,32 @@ Primer reporte (2026-11-11): **6 de 6 features con drift**. Es esperable y no in
 
 Costo: 7 métricas propias ≈ USD 2,10 al mes y 3 alarmas ≈ USD 0,30 al mes.
 
+## Reentrenamiento y compuerta de promoción (Paso 9)
+
+[`jobs/promover.py`](jobs/promover.py) decide si un modelo candidato (alias `staging`) reemplaza al de `production`, comparándolos **en el mismo periodo de validación**:
+
+| Modelo | Métrica principal (debe mejorar) | No puede empeorar | Cómo se mide |
+|---|---|---|---|
+| `secop-pgana` (G1) | log loss | ECE, y log loss y ECE en pymes | Se recalculan con los dos modelos sobre la misma muestra fija de la prueba: 60 mil participaciones jul 2025 – jul 2026 en `s3://…/monitoreo/validacion/g1_v1.parquet` |
+| `secop-ranking` | NDCG@10 de la lista 1 | NDCG@10 en pymes | Métricas registradas en el run de cada versión |
+| `secop-retrieval` (M1) | Recall@150 | Recall@150 en pymes | Métricas registradas en el run de cada versión |
+
+**Un empate no se promueve:** el candidato tiene que mejorar la métrica principal y no empeorar ninguna otra. Si solo se exigiera "no empeorar", un modelo idéntico al actual pasaría. Si pasa, el alias `production` se mueve al candidato. Si no, se queda en `staging` con las etiquetas `compuerta=rechazado` y `compuerta_motivo`, y se avisa a `secop-alertas`. Si a un candidato de ranking o retrieval le falta alguna métrica (por ejemplo la de pymes), la compuerta no puede verificar y no promueve.
+
+**Demostrado una vez (2026-11-12):** se registró una copia exacta del G1 actual como `secop-pgana` v2 en `staging`. La compuerta midió métricas idénticas (log loss 0,3825, ECE 0,0053; en pymes 0,4044 y 0,0055), lo dejó en `staging` ("log_loss no mejora"), `production` siguió en la v1 y llegó el aviso por SNS. Correrlo: `python -m jobs.promover --modelo secop-pgana` (con acceso al registro de MLflow; ver [MLflow](#mlflow)).
+
+**Pendiente: el reentrenamiento real.** Los scripts `train_retrieval.py`, `train_g1.py` y `train_ranking.py` no existen todavía: el código de entrenamiento sigue en el notebook final y el del retrieval en el notebook 03. Además necesita más de 18 GB (construir las features de 12 meses de candidatos), y la celda que crea `base_entrenamiento` se perdió. Cuando ML los entregue, el ciclo mensual sería: entrenar en Fargate → registrar con alias `staging` → `promover.py`. Para ranking y retrieval, el script de entrenamiento tendrá que registrar también las métricas de pymes.
+
+## Ingesta de procesos recientes (preparada, sin desplegar)
+
+**El problema:** desde el 26-oct casi no entran procesos nuevos a silver (346, 189 y 5 por semana, frente a ~2.400 antes). La Lambda `proyecto-integrador-ingesta` (de ingeniería de datos) pide `procesos-contratacion` por `:updated_at >= watermark`. SECOP reescribe `:updated_at` en millones de filas al día y la Lambda se corta en ~200 mil, casi todas de procesos viejos (en un archivo de la Lambda del 11-nov, las fechas de publicación van de 2015 a 2026).
+
+**La propuesta:** [`jobs/ingesta_recientes.py`](jobs/ingesta_recientes.py) pide solo lo publicado en los últimos 45 días (`fecha_de_publicacion_del`), con la misma paginación keyset y el mismo formato que la Lambda, y escribe `part-recientes-*.json.gz` en `bronze/procesos-contratacion/ingesta/fecha=<hoy>/`. `secop-silver-procesos` lee toda esa carpeta y su regla R4 deja una fila por `id_proceso` (gana la versión más reciente), así que no duplica lo que traiga la Lambda.
+
+**Probado solo en local (2026-11-12),** escribiendo en una carpeta temporal: 216.165 filas en 22 páginas, 13,6 min, 59 MB. Publicados del 28-sep al 10-nov, ~35 mil por semana, incluidas las semanas que hoy faltan. Las 61 columnas del archivo real de la Lambda están todas; hay 2 más (`fecha_de_publicacion_fase*`) porque Socrata omite los campos nulos. El 89 % son modalidades que E3 descarta por alcance; filtrarlas en la consulta bajaría mucho el tiempo.
+
+**Para desplegarla** (no está aplicado): reemplazar la definición de la Step Functions por [`infra/stepfunctions/secop-nocturno-con-ingesta.asl.json`](infra/stepfunctions/secop-nocturno-con-ingesta.asl.json), que agrega un paso ECS `IngestaRecientes` antes de E3 con la misma imagen y 1 vCPU / 2 GB, y agregar al rol `secop-jobs-tarea` los permisos de [`infra/stepfunctions/ingesta_recientes_permisos.json`](infra/stepfunctions/ingesta_recientes_permisos.json) (token en SSM y escritura solo de `part-recientes-*`). Costo ≈ USD 0,01 por noche. Requiere el visto bueno de ingeniería de datos, porque escribe en su capa bronze.
+
 ## CI (GitHub Actions)
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
@@ -222,5 +248,6 @@ TEST_DATABASE_URL=postgresql://postgres:prueba@localhost:55432/secop .venv/bin/p
 - [x] Step Functions programado con reintentos y alarma (`secop-nocturno` a las 07:30 de Bogotá; alertas por SNS al correo)
 - [x] GitHub Actions: lint, tests, build y despliegue (API y job)
 - [x] Reporte de drift diario en S3 (Evidently en `score.py`) y métricas de volumen con alarmas
-- [ ] Reentrenamiento de punta a punta con compuerta de promoción
+- [ ] Reentrenamiento de punta a punta con compuerta de promoción: **la compuerta está hecha y demostrada** (`jobs/promover.py`); faltan los `train_*.py` (el entrenamiento sigue en los notebooks y necesita más de 18 GB)
+- [ ] Ingesta de procesos recientes (`jobs/ingesta_recientes.py`): preparada y probada en local, **sin desplegar** (espera el visto bueno de ingeniería de datos)
 - [x] Plan B con docker-compose probado en un portátil (volcado de la publicación vigente desde RDS + API local)
