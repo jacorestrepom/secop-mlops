@@ -153,9 +153,16 @@ Todo avisa al tema SNS `secop-alertas` (correo confirmado).
 | El flujo nocturno terminó | Regla EventBridge `secop-nocturno-fallo` sobre la Step Functions | `FAILED`, `TIMED_OUT` o `ABORTED` |
 | La API responde | Alarma `secop-api-errores` | `Errors` de la Lambda > 0 en 5 min |
 | Volumen | `score.py` envía a CloudWatch (namespace `Secop`) `empresas_puntuadas`, `procesos_abiertos`, `largo_medio_lista2`, `duracion_min` y `publicacion` (solo cuando publica) | `secop-procesos-abiertos-bajos`: `procesos_abiertos` < 300 · `secop-sin-publicacion`: ninguna publicación en 26 h (métrica ausente = alarma) |
-| Drift (Paso 8) | Al final de `score.py`, reporte [Evidently](https://github.com/evidentlyai/evidently) 0.7.23 de ~24 mil pares de hoy frente a una muestra fija de 24 mil candidatos del entrenamiento (jul 2024 – jun 2025, `s3://…/monitoreo/drift/referencia_v1.parquet`) en `score_retrieval`, `knn_tasa50`, `knn_tasa5`, `unspsc_familia`, `dias_ult_part_ok` y `comp_entmod_media`. HTML y `resumen.json` en `s3://…/monitoreo/drift/fecha=<fecha_corte>/`; `drift_features` y `drift_share` en CloudWatch | — (se lee; si falla, no tumba la publicación) |
+| Drift (Paso 8) | Al final de `score.py`, reporte [Evidently](https://github.com/evidentlyai/evidently) 0.7.23 de ~24 mil pares de hoy frente a una muestra fija de 24 mil candidatos del entrenamiento (jul 2024 – jun 2025, `s3://…/monitoreo/drift/referencia_v1.parquet`) en `score_retrieval`, `knn_tasa50`, `knn_tasa5`, `unspsc_familia`, `dias_ult_part_ok` y `comp_entmod_media`. **Criterio fijo por tamaño de efecto**: Wasserstein normalizado > 0,1 en numéricas y PSI > 0,2 en `unspsc_familia`. HTML, `resumen.json` y la muestra de hoy (`muestra_hoy.parquet`) en `s3://…/monitoreo/drift/fecha=<fecha_corte>/`; `drift_features` y `drift_share` en CloudWatch. `python -m jobs.score --regenerar-drift AAAA-MM-DD` rehace el reporte desde esa muestra, sin recalcular las listas | — (se lee; si falla, no tumba la publicación) |
 
-Primer reporte (2026-11-11): **6 de 6 features con drift**. Es esperable y no indica un error: hoy hay solo 436 procesos abiertos, muy concentrados en pocas categorías (`unspsc_familia` 0,74; `comp_entmod_media` 0,61); entran 15 mil empresas frías que no estaban en el entrenamiento (`score_retrieval` 0,46); y el historial congelado hace crecer los días desde la última participación (`dias_ult_part_ok` 0,36). El reporte refleja justo los dos pendientes conocidos: la historia congelada y la ingesta.
+Reporte del 2026-11-12 (con la ingesta de recientes, criterio fijo): **4 de 6 features con drift**, y es coherente con lo que pasa:
+- `unspsc_familia` (PSI 18,0): los procesos abiertos de noviembre de 2026 se concentran en familias distintas a las de jul 2024 – jun 2025. El PSI se dispara cuando una de las más de 400 familias casi no aparece en la referencia, así que el número exagera, pero el cambio de mezcla es real.
+- `score_retrieval` (0,40): cambió la población. El entrenamiento solo tenía empresas que participaron en el mes; hoy también se puntúan 15 mil frías.
+- `comp_entmod_media` (0,38): otra mezcla de entidades y modalidades.
+- `dias_ult_part_ok` (0,38): efecto del historial congelado al 27-oct. Sube cada día y es la señal de que hay que renovar la historia.
+- `knn_tasa5` y `knn_tasa50` (0,05 y 0,06) **no** tienen drift: las tasas de victoria en procesos parecidos, el núcleo del G1, son estables.
+
+Ya con el criterio automático de Evidently se usaban medidas de tamaño de efecto (Wasserstein y Jensen-Shannon, porque las muestras pasan de 1.000 filas), no p-valores. Por eso fijar el criterio no cambió el conteo: lo deja explícito y estable.
 
 Costo: 7 métricas propias ≈ USD 2,10 al mes y 3 alarmas ≈ USD 0,30 al mes.
 
