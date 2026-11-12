@@ -399,6 +399,9 @@ COLS_DRIFT_NUM = ["score_retrieval", "knn_tasa50", "knn_tasa5", "dias_ult_part_o
 COLS_DRIFT_CAT = ["unspsc_familia"]
 COLS_DRIFT = COLS_DRIFT_NUM + COLS_DRIFT_CAT
 N_DRIFT, SEMILLA_DRIFT = 24_000, 42
+# Criterio por tamaño de efecto, fijo (no depende de lo que Evidently elija según el tamaño de la muestra)
+METODO_NUM, UMBRAL_NUM = "wasserstein", 0.1  # Wasserstein normalizado por la desviación de la referencia
+METODO_CAT, UMBRAL_CAT = "psi", 0.2  # Population Stability Index
 REFERENCIA_DRIFT = "monitoreo/drift/referencia_v1.parquet"
 
 
@@ -409,35 +412,63 @@ def reporte_drift(hoy: pd.DataFrame, referencia: pd.DataFrame) -> tuple[object, 
 
     dd = DataDefinition(numerical_columns=COLS_DRIFT_NUM, categorical_columns=COLS_DRIFT_CAT)
     prep = lambda d: d[COLS_DRIFT].assign(unspsc_familia=d.unspsc_familia.astype(str))  # noqa: E731
-    snap = Report([DataDriftPreset(columns=COLS_DRIFT)]).run(
+    preset = DataDriftPreset(
+        columns=COLS_DRIFT,
+        num_method=METODO_NUM,
+        num_threshold=UMBRAL_NUM,
+        cat_method=METODO_CAT,
+        cat_threshold=UMBRAL_CAT,
+    )
+    snap = Report([preset]).run(
         current_data=Dataset.from_pandas(prep(hoy), data_definition=dd),
         reference_data=Dataset.from_pandas(prep(referencia), data_definition=dd),
     )
-    resumen = {"features": {}, "n_hoy": len(hoy), "n_referencia": len(referencia)}
+    resumen = {
+        "features": {},
+        "n_hoy": len(hoy),
+        "n_referencia": len(referencia),
+        "criterio": {"numericas": f"{METODO_NUM} > {UMBRAL_NUM}", "categoricas": f"{METODO_CAT} > {UMBRAL_CAT}"},
+    }
     for m in snap.dict()["metrics"]:
         nombre, valor = str(m.get("metric_id") or m.get("metric_name")), m.get("value")
         if nombre.startswith("DriftedColumnsCount"):
             resumen["drift_features"], resumen["drift_share"] = int(valor["count"]), float(valor["share"])
         elif nombre.startswith("ValueDrift(column="):
             col = nombre.split("column=")[1].split(",")[0]
-            resumen["features"][col] = {"distancia": float(valor), "metodo": nombre.split("method=")[1].split(",")[0]}
+            metodo = nombre.split("method=")[1].split(",")[0]
+            umbral = float(nombre.split("threshold=")[1].rstrip(")"))
+            resumen["features"][col] = {
+                "distancia": float(valor),
+                "metodo": metodo,
+                "umbral": umbral,
+                "drift": float(valor) > umbral,
+            }
     return snap, resumen
 
 
-def drift_del_dia(muestra: list[pd.DataFrame], fecha_corte: str) -> dict:
+def drift_del_dia(muestra: pd.DataFrame | None, fecha_corte: str, metricas: bool = True) -> dict:
+    """Reporte de drift del día. Guarda la muestra de hoy (para poder regenerar el reporte sin recalcular las listas),
+    el HTML y resumen.json en s3://…/monitoreo/drift/fecha=<fecha_corte>/. Con ``muestra=None`` la lee de ahí."""
     import tempfile
 
     import boto3
 
     s3 = boto3.client("s3")
+    base = f"monitoreo/drift/fecha={fecha_corte}/"
     with tempfile.TemporaryDirectory() as tmp:
+        if muestra is None:
+            s3.download_file(BUCKET, base + "muestra_hoy.parquet", f"{tmp}/hoy.parquet")
+            muestra = pd.read_parquet(f"{tmp}/hoy.parquet")
+        else:
+            muestra.to_parquet(f"{tmp}/hoy.parquet", index=False)
+            s3.upload_file(f"{tmp}/hoy.parquet", BUCKET, base + "muestra_hoy.parquet")
         s3.download_file(BUCKET, REFERENCIA_DRIFT, f"{tmp}/ref.parquet")
-        snap, resumen = reporte_drift(pd.concat(muestra, ignore_index=True), pd.read_parquet(f"{tmp}/ref.parquet"))
-        base = f"monitoreo/drift/fecha={fecha_corte}/"
+        snap, resumen = reporte_drift(muestra, pd.read_parquet(f"{tmp}/ref.parquet"))
         snap.save_html(f"{tmp}/drift.html")
         s3.upload_file(f"{tmp}/drift.html", BUCKET, base + "drift.html", ExtraArgs={"ContentType": "text/html"})
         s3.put_object(Bucket=BUCKET, Key=base + "resumen.json", Body=json.dumps(resumen, indent=1).encode())
-    publicar_metricas({"drift_features": resumen["drift_features"], "drift_share": resumen["drift_share"]})
+    if metricas:
+        publicar_metricas({"drift_features": resumen["drift_features"], "drift_share": resumen["drift_share"]})
     resumen["s3"] = f"s3://{BUCKET}/{base}drift.html"
     return resumen
 
@@ -677,12 +708,12 @@ def correr(a) -> int:
                     "publicacion": 1,
                 }
             )
-        try:
-            with etapa("drift (Evidently) frente al entrenamiento"):
-                d = drift_del_dia(muestra_drift, fecha_corte)
-            log(f"   drift: {d['drift_features']} de {len(COLS_DRIFT)} features ({d['drift_share']:.0%}) → {d['s3']}")
-        except Exception as e:  # monitoreo: no tumba una publicación que ya está hecha
-            log(f"   ERROR en el reporte de drift (las listas ya están publicadas): {type(e).__name__}: {e}")
+    try:  # también con --sin-publicar (sin métricas en CloudWatch): el reporte es solo de monitoreo
+        with etapa("drift (Evidently) frente al entrenamiento"):
+            d = drift_del_dia(pd.concat(muestra_drift, ignore_index=True), fecha_corte, metricas=not a.sin_publicar)
+        log(f"   drift: {d['drift_features']} de {len(COLS_DRIFT)} features ({d['drift_share']:.0%}) → {d['s3']}")
+    except Exception as e:  # monitoreo: no tumba una publicación que ya está hecha
+        log(f"   ERROR en el reporte de drift (las listas no dependen de él): {type(e).__name__}: {e}")
     log(
         f"RESUMEN fecha_corte={fecha_corte} empresas={n_emp:,} procesos_abiertos={len(abiertos):,} "
         f"lista2_media={lista2_media:.2f} "
@@ -744,6 +775,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--fecha-corte", help="AAAA-MM-DD (por defecto, hoy en Bogotá)")
     ap.add_argument("--verificar-lotes", metavar="AAAA-MM-DD", help="prueba de lotes con un mes del notebook")
+    ap.add_argument("--regenerar-drift", metavar="AAAA-MM-DD", help="rehace el reporte de drift desde la muestra en S3")
     ap.add_argument("--dir-trabajo", default=os.getenv("SECOP_DIR_TRABAJO", "/tmp/secop"))
     ap.add_argument("--lote-empresas", type=int, default=10_000)
     ap.add_argument("--max-pares", type=int, default=1_000_000)
@@ -752,6 +784,10 @@ def main(argv=None) -> int:
     ap.add_argument("--sin-publicar", action="store_true", help="calcula todo pero no publica")
     a = ap.parse_args(argv)
     try:
+        if a.regenerar_drift:
+            d = drift_del_dia(None, a.regenerar_drift, metricas=False)
+            log(f"drift {a.regenerar_drift}: {d['drift_features']} de {len(COLS_DRIFT)} features → {d['s3']}")
+            return 0
         return verificar_lotes(a) if a.verificar_lotes else correr(a)
     except Exception as e:
         log(f"ERROR (código 1, no se publica): {type(e).__name__}: {e}")
