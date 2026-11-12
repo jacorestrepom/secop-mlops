@@ -1,0 +1,10 @@
+{
+  "Comment": "PREPARADO, SIN APLICAR. Permisos que habría que agregar al rol secop-jobs-tarea para que la tarea escriba en bronze.",
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "TokenSocrata", "Effect": "Allow", "Action": "ssm:GetParameter",
+     "Resource": "arn:aws:ssm:us-east-1:${AWS_ACCOUNT_ID}:parameter/secop/app-token"},
+    {"Sid": "BronzeRecientes", "Effect": "Allow", "Action": "s3:PutObject",
+     "Resource": "arn:aws:s3:::proyecto-integrador-bucket-01/bronze/procesos-contratacion/ingesta/*/part-recientes-*"}
+  ]
+}

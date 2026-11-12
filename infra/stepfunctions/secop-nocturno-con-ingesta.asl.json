@@ -1,0 +1,171 @@
+{
+  "Comment": "Flujo nocturno del recomendador SECOP: ingesta de recientes → silver procesos (E3) → ganador (E6) → score.py en Fargate. Si cualquier paso falla tras sus reintentos, termina en Falla y no publica (la API sigue con la versión anterior). Los valores ${...} se reemplazan al desplegar (README). Versión CON la ingesta de recientes: preparada, NO desplegada.",
+  "StartAt": "IngestaRecientes",
+  "TimeoutSeconds": 10800,
+  "States": {
+    "IngestaRecientes": {
+      "Type": "Task",
+      "Comment": "PREPARADO, SIN APLICAR. jobs/ingesta_recientes.py: procesos publicados en los últimos 45 días a bronze (part-recientes-*), para compensar la Lambda de ingesta. Misma imagen secop-jobs, tamaño reducido.",
+      "Resource": "arn:aws:states:::ecs:runTask.sync",
+      "Parameters": {
+        "Cluster": "${CLUSTER_ARN}",
+        "TaskDefinition": "${TASK_DEFINITION_ARN}",
+        "LaunchType": "FARGATE",
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "Subnets": ${SUBNETS},
+            "SecurityGroups": [
+              "${SG_JOBS}"
+            ],
+            "AssignPublicIp": "ENABLED"
+          }
+        },
+        "PropagateTags": "TASK_DEFINITION",
+        "Overrides": {
+          "Cpu": "1024",
+          "Memory": "2048",
+          "ContainerOverrides": [
+            {
+              "Name": "score",
+              "Command": [
+                "python",
+                "-m",
+                "jobs.ingesta_recientes",
+                "--dias",
+                "45"
+              ]
+            }
+          ]
+        }
+      },
+      "ResultPath": "$.ingesta_recientes",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "IntervalSeconds": 120,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "Falla"
+        }
+      ],
+      "Next": "SilverProcesos"
+    },
+    "SilverProcesos": {
+      "Type": "Task",
+      "Comment": "Reescribe secop_silver.procesos desde bronze (deja estado preliminar y sin sector_entidad).",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "secop-silver-procesos"
+      },
+      "ResultPath": "$.silver_procesos",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "IntervalSeconds": 120,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "Falla"
+        }
+      ],
+      "Next": "SilverGanador"
+    },
+    "SilverGanador": {
+      "Type": "Task",
+      "Comment": "Completa ganador, estado, sector_entidad y n_proponentes. Debe correr después de E3.",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "secop-silver-ganador"
+      },
+      "ResultPath": "$.silver_ganador",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "IntervalSeconds": 120,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "Falla"
+        }
+      ],
+      "Next": "Score"
+    },
+    "Score": {
+      "Type": "Task",
+      "Comment": "jobs/score.py (fecha_corte = hoy en Bogotá). Sale con 2 si silver no está fresco y con 1 si falla: en los dos casos no publica.",
+      "Resource": "arn:aws:states:::ecs:runTask.sync",
+      "Parameters": {
+        "Cluster": "${CLUSTER_ARN}",
+        "TaskDefinition": "${TASK_DEFINITION_ARN}",
+        "LaunchType": "FARGATE",
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "Subnets": ${SUBNETS},
+            "SecurityGroups": [
+              "${SG_JOBS}"
+            ],
+            "AssignPublicIp": "ENABLED"
+          }
+        },
+        "PropagateTags": "TASK_DEFINITION"
+      },
+      "ResultPath": "$.score",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "IntervalSeconds": 300,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "Falla"
+        }
+      ],
+      "Next": "Publicado"
+    },
+    "Publicado": {
+      "Type": "Succeed"
+    },
+    "Falla": {
+      "Type": "Fail",
+      "Error": "SecopNocturnoFallo",
+      "Cause": "Un paso falló tras sus reintentos: no se publicó nada y la API sigue con la versión anterior."
+    }
+  }
+}
