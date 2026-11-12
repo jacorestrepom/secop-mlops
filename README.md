@@ -158,14 +158,20 @@ Todo avisa al tema SNS `secop-alertas` (correo confirmado).
 | Volumen | `score.py` envía a CloudWatch (namespace `Secop`) `empresas_puntuadas`, `procesos_abiertos`, `largo_medio_lista2`, `duracion_min` y `publicacion` (solo cuando publica) | `secop-procesos-abiertos-bajos`: `procesos_abiertos` < 300 · `secop-sin-publicacion`: ninguna publicación en 26 h (métrica ausente = alarma) |
 | Drift (Paso 8) | Al final de `score.py`, reporte [Evidently](https://github.com/evidentlyai/evidently) 0.7.23 de ~24 mil pares de hoy frente a una muestra fija de 24 mil candidatos del entrenamiento (jul 2024 – jun 2025, `s3://…/monitoreo/drift/referencia_v1.parquet`) en `score_retrieval`, `knn_tasa50`, `knn_tasa5`, `unspsc_familia`, `dias_ult_part_ok` y `comp_entmod_media`. **Criterio fijo por tamaño de efecto**: Wasserstein normalizado > 0,1 en numéricas y PSI > 0,2 en `unspsc_familia`. HTML, `resumen.json` y la muestra de hoy (`muestra_hoy.parquet`) en `s3://…/monitoreo/drift/fecha=<fecha_corte>/`; `drift_features` y `drift_share` en CloudWatch. `python -m jobs.score --regenerar-drift AAAA-MM-DD` rehace el reporte desde esa muestra, sin recalcular las listas | — (se lee; si falla, no tumba la publicación) |
 
-Reporte del 2026-11-12 (con la ingesta de recientes, criterio fijo): **4 de 6 features con drift**, y es coherente con lo que pasa:
-- `unspsc_familia` (PSI 18,0): los procesos abiertos de noviembre de 2026 se concentran en familias distintas a las de jul 2024 – jun 2025. El PSI se dispara cuando una de las más de 400 familias casi no aparece en la referencia, así que el número exagera, pero el cambio de mezcla es real.
-- `score_retrieval` (0,40): cambió la población. El entrenamiento solo tenía empresas que participaron en el mes; hoy también se puntúan 15 mil frías.
-- `comp_entmod_media` (0,38): otra mezcla de entidades y modalidades.
-- `dias_ult_part_ok` (0,38): efecto del historial congelado al 27-oct. Sube cada día y es la señal de que hay que renovar la historia.
-- `knn_tasa5` y `knn_tasa50` (0,05 y 0,06) **no** tienen drift: las tasas de victoria en procesos parecidos, el núcleo del G1, son estables.
+**PSI de las categóricas**: lo calcula `score.py` (`psi_suavizado`), no Evidently. Las categorías con menos del 1 % en las dos muestras se agrupan en `otras`, y las frecuencias 0 se suben a 1e-4 y se renormaliza. El PSI de Evidently reemplaza los ceros sin renormalizar y daba 17,97 donde este da 7,03. El HTML de Evidently queda como apoyo visual, con las raras ya agrupadas.
 
-Ya con el criterio automático de Evidently se usaban medidas de tamaño de efecto (Wasserstein y Jensen-Shannon, porque las muestras pasan de 1.000 filas), no p-valores. Por eso fijar el criterio no cambió el conteo: lo deja explícito y estable.
+Lectura del reporte del 2026-11-12 (`--regenerar-drift`): **4 de 6 features con drift, y las 4 tienen causa conocida.** Medias de la referencia (24 mil candidatos de jul 2024 – jun 2025) frente a hoy (24 mil pares):
+
+| Feature | Medida | Referencia → hoy | Lectura |
+|---|---|---|---|
+| `unspsc_familia` | PSI 7,03 (> 0,2) | `sin_dato`: 8,0 % → 99,5 % | **Drift real de la fuente, no un error de cálculo.** Desde octubre de 2026, datos.gov.co publica `codigo_principal_de_categoria = 'UNSPECIFIED'` en el 99,6 % de los procesos nuevos de las modalidades competitivas (10.588 de 10.626 entre el 15-oct y el 12-nov; en marzo de 2026 era el 8,5 %). La limpieza de silver lo deja nulo y el modelo lo ve como `sin_dato`. El código no viene en ninguna otra columna (`categorias_adicionales` dice "No definido"). Tipo y formato de la categoría coinciden en los dos lados (texto de 4 dígitos). Impacto en el modelo: *pendiente, lo mide ML* |
+| `score_retrieval` | Wasserstein 0,40 | media 0,219 → 0,088 (mediana 0,050 → 0,004) | Consecuencia sobre todo de lo anterior: la familia es uno de los componentes de la similitud del M1. Ya en la referencia, los pares sin familia tenían un score medio de 0,137 frente a 0,226 con familia; hoy, 0,087 sin familia (23.883 pares) frente a 0,370 con familia (117). Influye también que hoy se puntúan empresas frías, que el entrenamiento no tenía |
+| `comp_entmod_media` | Wasserstein 0,39 | media 4,40 → 6,52 (mediana 3,39 → 3,81; p90 6,25 → 13,79) | Competencia esperada por entidad y modalidad. La mediana casi no se mueve; lo que cambia es la cola: entre los procesos abiertos de hoy pesan más entidades y modalidades con muchos proponentes |
+| `dias_ult_part_ok` | Wasserstein 0,38 | media 82 → 131 días (mediana 14 → 98) | Esperado: el historial está congelado al 27-oct-2026, así que los días desde la última participación crecen uno por día. Es la señal de que hay que renovar la historia |
+| `knn_tasa50` | Wasserstein 0,055 | 0,376 → 0,384 | Sin drift |
+| `knn_tasa5` | Wasserstein 0,043 | 0,372 → 0,376 | Sin drift: las tasas de victoria en procesos parecidos, el núcleo del G1, son estables |
+
+Las numéricas usan el Wasserstein normalizado de Evidently. Al regenerar, `knn_tasa50` y `comp_entmod_media` se movieron en el tercer decimal frente al reporte de la noche (0,059 → 0,055 y 0,382 → 0,393), sin cambiar la conclusión. `resumen.json` guarda ahora las medias de referencia y de hoy de cada numérica.
 
 Costo: 7 métricas propias ≈ USD 2,10 al mes y 3 alarmas ≈ USD 0,30 al mes.
 

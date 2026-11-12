@@ -402,7 +402,32 @@ N_DRIFT, SEMILLA_DRIFT = 24_000, 42
 # Criterio por tamaño de efecto, fijo (no depende de lo que Evidently elija según el tamaño de la muestra)
 METODO_NUM, UMBRAL_NUM = "wasserstein", 0.1  # Wasserstein normalizado por la desviación de la referencia
 METODO_CAT, UMBRAL_CAT = "psi", 0.2  # Population Stability Index
+MIN_FREC_CAT, EPS_PSI = 0.01, 1e-4  # raras (< 1 % en las dos muestras) a "otras"; épsilon en frecuencias 0
 REFERENCIA_DRIFT = "monitoreo/drift/referencia_v1.parquet"
+
+
+def _como_categoria(x: pd.Series) -> pd.Series:
+    return x.astype(str).fillna("sin_dato")
+
+
+def categorias_raras(referencia: pd.Series, hoy: pd.Series, minimo: float = MIN_FREC_CAT) -> set[str]:
+    """Categorías con frecuencia < ``minimo`` en las DOS muestras: se agrupan en "otras" antes del PSI."""
+    fr = _como_categoria(referencia).value_counts(normalize=True)
+    fh = _como_categoria(hoy).value_counts(normalize=True)
+    todas = fr.index.union(fh.index)
+    fr, fh = fr.reindex(todas, fill_value=0), fh.reindex(todas, fill_value=0)
+    return set(todas[(fr < minimo) & (fh < minimo)])
+
+
+def psi_suavizado(referencia: pd.Series, hoy: pd.Series, eps: float = EPS_PSI) -> float:
+    """PSI con raras en "otras" y épsilon en las frecuencias 0 (renormalizado): sum((h - r) * ln(h / r))."""
+    raras = categorias_raras(referencia, hoy)
+    agrupar = lambda x: _como_categoria(x).where(~_como_categoria(x).isin(raras), "otras")  # noqa: E731
+    fr, fh = agrupar(referencia).value_counts(normalize=True), agrupar(hoy).value_counts(normalize=True)
+    todas = fr.index.union(fh.index)
+    fr, fh = (f.reindex(todas, fill_value=0).clip(lower=eps) for f in (fr, fh))
+    fr, fh = fr / fr.sum(), fh / fh.sum()
+    return float(((fh - fr) * np.log(fh / fr)).sum())
 
 
 def reporte_drift(hoy: pd.DataFrame, referencia: pd.DataFrame) -> tuple[object, dict]:
@@ -411,7 +436,10 @@ def reporte_drift(hoy: pd.DataFrame, referencia: pd.DataFrame) -> tuple[object, 
     from evidently.presets import DataDriftPreset
 
     dd = DataDefinition(numerical_columns=COLS_DRIFT_NUM, categorical_columns=COLS_DRIFT_CAT)
-    prep = lambda d: d[COLS_DRIFT].assign(unspsc_familia=d.unspsc_familia.astype(str))  # noqa: E731
+    raras = {c: categorias_raras(referencia[c], hoy[c]) for c in COLS_DRIFT_CAT}
+    prep = lambda d: d[COLS_DRIFT].assign(  # noqa: E731
+        **{c: d[c].astype(str).where(~d[c].astype(str).isin(raras[c]), "otras") for c in COLS_DRIFT_CAT}
+    )
     preset = DataDriftPreset(
         columns=COLS_DRIFT,
         num_method=METODO_NUM,
@@ -443,6 +471,17 @@ def reporte_drift(hoy: pd.DataFrame, referencia: pd.DataFrame) -> tuple[object, 
                 "umbral": umbral,
                 "drift": float(valor) > umbral,
             }
+    # Categóricas: el PSI se recalcula aquí con suavizado explícito (el de Evidently reemplaza los ceros sin
+    # renormalizar y daba 17,97 donde este da 7,03); el HTML de Evidently queda como apoyo visual.
+    for c in COLS_DRIFT_CAT:
+        v = psi_suavizado(referencia[c], hoy[c])
+        resumen["features"][c] = {"distancia": v, "metodo": "psi_suavizado", "umbral": UMBRAL_CAT,
+                                  "drift": v > UMBRAL_CAT}  # fmt: skip
+    for c in COLS_DRIFT_NUM:
+        resumen["features"][c]["media_referencia"] = float(referencia[c].mean())
+        resumen["features"][c]["media_hoy"] = float(hoy[c].mean())
+    resumen["drift_features"] = sum(f["drift"] for f in resumen["features"].values())
+    resumen["drift_share"] = resumen["drift_features"] / len(COLS_DRIFT)
     return snap, resumen
 
 
