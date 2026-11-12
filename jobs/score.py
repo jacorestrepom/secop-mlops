@@ -217,28 +217,34 @@ def lotes(empresas: list[str], tam: int) -> list[list[str]]:
 
 
 def centinelas(hr, fecha_corte: str) -> tuple[str, str]:
-    """Una empresa sin actividad en la ventana del retrieval (fría) y una con actividad (caliente), ambas usuarios
-    objetivo con llave. Se agregan a un lote al que le falte uno de los dos grupos (ml.retrieval falla si alguno
-    queda vacío) y sus filas se descartan: como las empresas son independientes, no cambian a las demás."""
+    """Dos empresas de relleno (usuarios objetivo con llave): una sin participaciones ni contratos en la ventana del
+    retrieval (fría) y una con participaciones (caliente). ml.retrieval falla si en un lote no hay ninguna fría o
+    ninguna con participaciones (el texto del historial sale solo de participaciones). Se agregan al lote al que le
+    falte una y sus filas se descartan: como las empresas son independientes, no cambian a las demás."""
     mes = pd.Timestamp(fecha_corte)
-    _, hist = hr.historial(mes, hr.objetivo)
-    con = np.unique(hist.pk.values)
-    frio = np.setdiff1d(hr.objetivo, con)
-    return str(hr.empresas_idx.values[frio.min()]), str(hr.empresas_idx.values[con.min()])
+    part, hist = hr.historial(mes, hr.objetivo)
+    con_actividad = np.unique(hist.pk.values)
+    frio = np.setdiff1d(hr.objetivo, con_actividad)
+    con_part = np.unique(part.pk.values)
+    return str(hr.empresas_idx.values[frio.min()]), str(hr.empresas_idx.values[con_part.min()])
 
 
-def recuperar_por_lotes(hr, empresas, abiertos, fecha_corte, modelo, tam) -> pd.DataFrame:
+def recuperar_por_lotes(hr, grupos, abiertos, fecha_corte, modelo, tam) -> pd.DataFrame:
+    """recuperar() por lotes de ``tam`` empresas. Cada grupo (p. ej. calientes y frías) se parte por separado: un
+    lote nunca mezcla grupos, así que los lotes de solo-frías existen y se prueban (verificar_lotes)."""
     from ml.retrieval import recuperar
 
     s_frio, s_cal = centinelas(hr, fecha_corte)
     mes = pd.Timestamp(fecha_corte)
     partes = []
-    for i, lote in enumerate(lotes(empresas, tam), 1):
+    todos = [lote for g in grupos for lote in lotes(list(g), tam)]
+    for i, lote in enumerate(todos, 1):
         pks = hr.empresas_idx.get_indexer(pd.Index(lote))
         pks = pks[pks >= 0]  # recuperar() descarta las que no tienen llave
-        _, hist = hr.historial(mes, pks)
-        n_cal = len(np.intersect1d(pks, hist.pk.values))
-        extra = ([s_frio] if n_cal == len(pks) else []) + ([s_cal] if n_cal == 0 else [])
+        part, hist = hr.historial(mes, pks)
+        n_actividad = len(np.intersect1d(pks, hist.pk.values))  # con participaciones o contratos
+        n_part = len(np.intersect1d(pks, part.pk.values))  # con participaciones
+        extra = ([s_frio] if n_actividad == len(pks) else []) + ([s_cal] if n_part == 0 else [])
         top = recuperar(lote + extra, abiertos, fecha_corte, historia=hr, modelo=modelo)
         if extra:
             top = top[~top.proveedor_key.isin(set(extra) - set(lote))]
@@ -458,7 +464,7 @@ def leer_historia(d: Path):
     }
 
 
-def calcular_listas(tablas, procesos, empresas, abiertos, fecha_corte, modelos, lote_empresas, max_pares):
+def calcular_listas(tablas, procesos, grupos, abiertos, fecha_corte, modelos, lote_empresas, max_pares):
     """recuperar (por lotes) → liberar HistoriaRetrieval → construir/rankear/armar_listas (por lotes)."""
     from ml.features import COLS_CONTRATOS, COLS_PROVEEDORES, Historia
     from ml.features import COLS_PROCESOS as CPF
@@ -474,7 +480,7 @@ def calcular_listas(tablas, procesos, empresas, abiertos, fecha_corte, modelos, 
             proveedores=tablas["proveedores"],
             nombres=tablas["nombres"],
         )
-        cand = recuperar_por_lotes(hr, empresas, abiertos, fecha_corte, modelos["retrieval"], lote_empresas)
+        cand = recuperar_por_lotes(hr, grupos, abiertos, fecha_corte, modelos["retrieval"], lote_empresas)
         del hr
     log(f"   candidatos: {len(cand):,} pares de {cand.proveedor_key.nunique():,} empresas")
     with etapa("historia de features + construir/rankear/armar_listas por lotes"):
@@ -537,7 +543,7 @@ def correr(a) -> int:
     listas = calcular_listas(
         tablas,
         procesos,
-        calientes + frias,
+        [calientes, frias],
         list(abiertos.id_proceso),
         fecha_corte,
         modelos,
@@ -593,8 +599,9 @@ def correr(a) -> int:
 
 
 def verificar_lotes(a) -> int:
-    """Marzo (u otro mes) de una vez con TODAS las empresas del notebook vs por lotes solo con jurídicas: las
-    listas de las jurídicas deben ser idénticas (sha256). Si no, el job por lotes no se puede usar."""
+    """Un mes del notebook (marzo) de una vez con TODAS las empresas (más una muestra de frías jurídicas con la
+    regla de producción) vs por lotes, solo jurídicas y con los grupos separados (lotes de solo-frías, como en
+    producción): las listas de las jurídicas deben ser idénticas (sha256). Si no, el job por lotes no se usa."""
     from ml.retrieval import COLS_PROCESOS as CPR
     from ml.retrieval import HistoriaRetrieval
 
@@ -619,12 +626,19 @@ def verificar_lotes(a) -> int:
         del hr
     tipo = tablas["proveedores"].drop_duplicates("proveedor_key").set_index("proveedor_key").tipo_proveedor
     juridicas = sorted(k for k in empresas if tipo.get(k) not in (None, "persona_natural") and pd.notna(tipo.get(k)))
-    log(f"   {len(empresas):,} empresas del mes ({len(juridicas):,} jurídicas) | {len(abiertos):,} procesos")
+    _, frias = empresas_a_puntuar(tablas["proveedores"], tablas["proponentes"], tablas["contratos"], mes)
+    frias = [k for k in frias if k not in set(empresas)][: a.muestra_frias]
+    log(
+        f"   {len(empresas):,} empresas del mes ({len(juridicas):,} jurídicas) + {len(frias):,} frías jurídicas "
+        f"| {len(abiertos):,} procesos"
+    )
     with etapa("A · de una vez, todas las empresas"):
-        A = calcular_listas(tablas, procesos, sorted(empresas), abiertos, mes, modelos, 10**9, 10**12)
-    with etapa("B · por lotes, solo jurídicas"):
-        B = calcular_listas(tablas, procesos, juridicas, abiertos, mes, modelos, a.lote_empresas, a.max_pares)
-    ha, hb = sha256_listas(A[A.proveedor_key.isin(set(juridicas))]), sha256_listas(B)
+        A = calcular_listas(
+            tablas, procesos, [sorted(set(empresas) | set(frias))], abiertos, mes, modelos, 10**9, 10**12
+        )
+    with etapa("B · por lotes, solo jurídicas, frías en lotes propios"):
+        B = calcular_listas(tablas, procesos, [juridicas, frias], abiertos, mes, modelos, a.lote_empresas, a.max_pares)
+    ha, hb = sha256_listas(A[A.proveedor_key.isin(set(juridicas) | set(frias))]), sha256_listas(B)
     log(f"   sha256 A (jurídicas): {ha}\n   sha256 B (por lotes): {hb}")
     if ha != hb:
         log("FALLA: la versión por lotes NO da lo mismo")
@@ -641,6 +655,7 @@ def main(argv=None) -> int:
     ap.add_argument("--lote-empresas", type=int, default=10_000)
     ap.add_argument("--max-pares", type=int, default=1_000_000)
     ap.add_argument("--muestra", type=int, default=0, help="solo N empresas calientes (pruebas)")
+    ap.add_argument("--muestra-frias", type=int, default=3_000, help="frías que agrega --verificar-lotes")
     ap.add_argument("--sin-publicar", action="store_true", help="calcula todo pero no publica")
     a = ap.parse_args(argv)
     try:
