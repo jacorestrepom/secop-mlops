@@ -1,0 +1,101 @@
+{
+ "periodo_prueba": "jul 2025 – jul 2026",
+ "lista_historial": [
+  {
+   "nombre": "Precision@10",
+   "valor": 0.1098,
+   "referencia": 0.0862,
+   "nombre_referencia": "Retrieval solo"
+  },
+  {
+   "nombre": "Recall@10",
+   "valor": 0.5657,
+   "referencia": 0.4548,
+   "nombre_referencia": "Retrieval solo"
+  },
+  {
+   "nombre": "NDCG@10",
+   "valor": 0.462,
+   "referencia": 0.3619,
+   "nombre_referencia": "Retrieval solo"
+  }
+ ],
+ "lista_oportunidad": [
+  {
+   "nombre": "% oportunidades plausibles",
+   "valor": 67.66,
+   "referencia": 62.27,
+   "nombre_referencia": "Azar con filtros"
+  },
+  {
+   "nombre": "% plausibles con ganador similar",
+   "valor": 22.99,
+   "referencia": 20.76,
+   "nombre_referencia": "Azar con filtros"
+  },
+  {
+   "nombre": "MAP@10 (plausible)",
+   "valor": 0.7613,
+   "referencia": 0.7008,
+   "nombre_referencia": "Azar con filtros"
+  },
+  {
+   "nombre": "ECE de P(gana) en la lista 2",
+   "valor": 0.0713,
+   "referencia": null,
+   "nombre_referencia": null
+  }
+ ],
+ "calibracion_pgana": [
+  {
+   "decil": 1,
+   "probabilidad_media": 0.0192,
+   "tasa_real": 0.0162
+  },
+  {
+   "decil": 2,
+   "probabilidad_media": 0.0388,
+   "tasa_real": 0.0359
+  },
+  {
+   "decil": 3,
+   "probabilidad_media": 0.0654,
+   "tasa_real": 0.0628
+  },
+  {
+   "decil": 4,
+   "probabilidad_media": 0.0998,
+   "tasa_real": 0.0985
+  },
+  {
+   "decil": 5,
+   "probabilidad_media": 0.143,
+   "tasa_real": 0.1437
+  },
+  {
+   "decil": 6,
+   "probabilidad_media": 0.2023,
+   "tasa_real": 0.2018
+  },
+  {
+   "decil": 7,
+   "probabilidad_media": 0.2929,
+   "tasa_real": 0.2842
+  },
+  {
+   "decil": 8,
+   "probabilidad_media": 0.4474,
+   "tasa_real": 0.439
+  },
+  {
+   "decil": 9,
+   "probabilidad_media": 0.6973,
+   "tasa_real": 0.7057
+  },
+  {
+   "decil": 10,
+   "probabilidad_media": 0.9297,
+   "tasa_real": 0.9337
+  }
+ ]
+}

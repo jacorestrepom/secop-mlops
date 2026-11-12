@@ -1,7 +1,10 @@
 # CI/CD del repo secop-mlops.
-# - En cada pull request: ruff + pytest (con PostgreSQL para publicar y la fuente RDS) + build de la imagen sin push.
-# - En push a main: lo mismo y, si pasa, build linux/amd64 → ECR (etiqueta = hash corto del commit) → Lambda →
-#   verificación de /health. Credenciales por OIDC (rol secop-github-deploy, solo main): no hay llaves en GitHub.
+# - En cada pull request: ruff + pytest (con PostgreSQL para publicar y la fuente RDS) + build de las dos imágenes
+#   (secop-api y secop-jobs) sin push.
+# - En push a main: lo mismo y, si pasa, build linux/amd64 → ECR (etiqueta = hash corto del commit) de secop-api y
+#   secop-jobs → Lambda con la nueva secop-api → verificación de /health. La task definition secop-score apunta a
+#   una etiqueta fija: cambiar de imagen del job es registrar una revisión nueva (a mano, con su prueba).
+# Credenciales por OIDC (rol secop-github-deploy, solo main): no hay llaves en GitHub.
 name: CI
 
 on:
@@ -43,9 +46,11 @@ jobs:
         run: ruff check . && ruff format --check .
       - name: Pruebas
         run: pytest -q -rs
-      - name: Build de la imagen (sin push)
+      - name: Build de las imágenes (sin push)
         if: github.event_name == 'pull_request'
-        run: docker build --platform linux/amd64 --provenance=false -f api/Dockerfile -t secop-api:pr .
+        run: |
+          docker build --platform linux/amd64 --provenance=false -f api/Dockerfile -t secop-api:pr .
+          docker build --platform linux/amd64 --provenance=false -f infra/jobs.Dockerfile -t secop-jobs:pr .
 
   desplegar:
     needs: pruebas
@@ -74,6 +79,11 @@ jobs:
           docker build --platform linux/amd64 --provenance=false --sbom=false -f api/Dockerfile -t "$IMAGEN" .
           docker push "$IMAGEN"
           echo "uri=$IMAGEN" >> "$GITHUB_OUTPUT"
+      - name: Build y push de secop-jobs a ECR
+        run: |
+          IMAGEN=${{ steps.ecr.outputs.registry }}/secop-jobs:${GITHUB_SHA::7}
+          docker build --platform linux/amd64 --provenance=false --sbom=false -f infra/jobs.Dockerfile -t "$IMAGEN" .
+          docker push "$IMAGEN"
       - name: Actualizar la Lambda
         run: |
           aws lambda update-function-code --function-name secop-api --image-uri "${{ steps.imagen.outputs.uri }}" \
