@@ -31,7 +31,18 @@ def _procesos_del_mes(fechas: pd.Series) -> np.ndarray:
     return ((f >= FECHA) & (f < FECHA + pd.offsets.MonthBegin(1))).values
 
 
-def correr(data: Path, salida: Path, variante: str) -> None:
+def _imputar(tabla: pd.DataFrame, m: np.ndarray, imputacion: pd.DataFrame | None, indice: bool = False) -> None:
+    """Rellena el UNSPSC de los procesos del mes con la imputación (lo que no venga queda nulo)."""
+    if imputacion is None:
+        return
+    ids = pd.Index(tabla.index if indice else tabla["id_proceso"])[m].astype(str)
+    imp = imputacion.set_index(imputacion.id_proceso.astype(str))
+    for c in ["unspsc_segmento", "unspsc_familia"]:
+        tabla.loc[m, c] = imp[c].reindex(ids).values
+
+
+def correr(data: Path, salida: Path, variante: str, imputacion: pd.DataFrame | None = None) -> None:
+    """imputacion (solo variante "imputado"): id_proceso, unspsc_segmento, unspsc_familia para los procesos del mes."""
     from ml.features import Historia, construir
     from ml.listas import armar_listas
     from ml.ranking import rankear
@@ -39,9 +50,10 @@ def correr(data: Path, salida: Path, variante: str) -> None:
 
     t0 = time.time()
     hr = HistoriaRetrieval.desde_carpeta(data / "clean")
-    if variante == "sin_unspsc":  # solo los procesos consultados; part_all (historial) ya quedó armado
+    if variante != "normal":  # solo los procesos consultados; part_all (historial) ya quedó armado
         m = _procesos_del_mes(hr.proc.fecha_publicacion)
         hr.proc.loc[m, [c for c in COLS_UNSPSC if c in hr.proc]] = np.nan
+        _imputar(hr.proc, m, imputacion)
         print(f"retrieval: {m.sum():,} procesos del mes sin UNSPSC", flush=True)
     empresas, procesos = hr.entradas_del_mes(FECHA)
     cand = recuperar(empresas, procesos, FECHA, historia=hr, modelo=data / "retrieval_v2" / "M1_final_unico.txt")
@@ -51,9 +63,10 @@ def correr(data: Path, salida: Path, variante: str) -> None:
     print(f"recuperar: {len(cand):,} pares | {time.time() - t0:.0f} s", flush=True)
 
     h = Historia.desde_carpeta(data / "clean")
-    if variante == "sin_unspsc":  # PROC = datos de los procesos candidatos; los eventos (EV) no se tocan
+    if variante != "normal":  # PROC = datos de los procesos candidatos; los eventos (EV) no se tocan
         m = _procesos_del_mes(h.PROC.fecha_publicacion)
         h.PROC.loc[m, [c for c in COLS_UNSPSC if c in h.PROC]] = np.nan
+        _imputar(h.PROC, m, imputacion, indice=True)
     feats = construir(cand, historia=h)
     del h
     gc.collect()
