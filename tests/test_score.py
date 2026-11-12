@@ -179,3 +179,42 @@ def test_publicacion_sin_personas_naturales(pg_dsn):
     assert {p["entidad"] for p in pub.procesos} == {"Alcaldía X", "Entidad 2"}
     assert not pub.datos_simulados
     assert publicar(pg_dsn, pub) > 0
+
+
+def test_metricas_de_volumen_en_cloudwatch():
+    class Falso:
+        def put_metric_data(self, **kw):
+            self.kw = kw
+
+    c = Falso()
+    S.publicar_metricas({"empresas_puntuadas": 29994, "procesos_abiertos": 436, "duracion_min": 21.2}, cliente=c)
+    assert c.kw["Namespace"] == "Secop"
+    assert {d["MetricName"]: d["Value"] for d in c.kw["MetricData"]} == {
+        "empresas_puntuadas": 29994.0,
+        "procesos_abiertos": 436.0,
+        "duracion_min": 21.2,
+    }
+
+
+def test_reporte_drift_detecta_la_feature_que_se_movio():
+    pytest.importorskip("evidently")
+    import numpy as np
+
+    rng = np.random.default_rng(0)
+
+    def datos(desplazamiento):
+        n = 3000
+        return pd.DataFrame(
+            {
+                "score_retrieval": rng.normal(desplazamiento, 1, n),
+                "knn_tasa50": rng.uniform(0, 1, n),
+                "knn_tasa5": rng.uniform(0, 1, n),
+                "dias_ult_part_ok": rng.exponential(30, n),
+                "comp_entmod_media": rng.normal(3, 1, n),
+                "unspsc_familia": rng.choice(["4312", "8011", "7210"], n),
+            }
+        )
+
+    _, r = S.reporte_drift(datos(3.0), datos(0.0))
+    assert r["drift_features"] == 1 and r["features"]["score_retrieval"]["distancia"] > 0.1
+    assert set(r["features"]) == set(S.COLS_DRIFT)

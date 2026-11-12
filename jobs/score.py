@@ -270,8 +270,10 @@ COLS_LISTAS = [
 ]
 
 
-def puntuar_por_lotes(candidatos, h, g1, v2, max_pares) -> pd.DataFrame:
-    """construir → rankear → armar_listas por lotes de empresas completas (≤ max_pares pares por lote)."""
+def puntuar_por_lotes(candidatos, h, g1, v2, max_pares, muestra_drift: list | None = None) -> pd.DataFrame:
+    """construir → rankear → armar_listas por lotes de empresas completas (≤ max_pares pares por lote).
+    Si se da ``muestra_drift`` (lista), le agrega una muestra fija (~N_DRIFT filas en total) de las features de
+    drift de cada lote: así no hay que guardar todas las features."""
     from ml.features import construir
     from ml.listas import armar_listas
     from ml.ranking import rankear
@@ -281,9 +283,14 @@ def puntuar_por_lotes(candidatos, h, g1, v2, max_pares) -> pd.DataFrame:
     corte = (tam.cumsum() // max_pares).rename("lote")
     lote_de = candidatos.proveedor_key.map(corte)
     partes = []
+    frac = min(1.0, N_DRIFT / max(len(candidatos), 1))
     for i, (_, idx) in enumerate(candidatos.groupby(lote_de, sort=True).groups.items(), 1):
         pares = candidatos.loc[idx]
-        listas = armar_listas(rankear(construir(pares, fecha_corte=None, historia=h), g1=g1, v2=v2))
+        feats = construir(pares, fecha_corte=None, historia=h)
+        if muestra_drift is not None:
+            muestra_drift.append(feats[COLS_DRIFT].sample(frac=frac, random_state=SEMILLA_DRIFT))
+        listas = armar_listas(rankear(feats, g1=g1, v2=v2))
+        del feats
         partes.append(listas[COLS_LISTAS])
         log(
             f"   puntuar lote {i}: {pares.proveedor_key.nunique():,} empresas, {len(pares):,} pares → "
@@ -385,6 +392,70 @@ def armar_publicacion(
     )
 
 
+NAMESPACE = "Secop"
+
+# Paso 8 · drift: features de hoy frente a una muestra fija de los candidatos de entrenamiento (jul 2024 – jun 2025)
+COLS_DRIFT_NUM = ["score_retrieval", "knn_tasa50", "knn_tasa5", "dias_ult_part_ok", "comp_entmod_media"]
+COLS_DRIFT_CAT = ["unspsc_familia"]
+COLS_DRIFT = COLS_DRIFT_NUM + COLS_DRIFT_CAT
+N_DRIFT, SEMILLA_DRIFT = 24_000, 42
+REFERENCIA_DRIFT = "monitoreo/drift/referencia_v1.parquet"
+
+
+def reporte_drift(hoy: pd.DataFrame, referencia: pd.DataFrame) -> tuple[object, dict]:
+    """Reporte Evidently (DataDriftPreset). Devuelve (snapshot, resumen con el drift de cada feature)."""
+    from evidently import DataDefinition, Dataset, Report
+    from evidently.presets import DataDriftPreset
+
+    dd = DataDefinition(numerical_columns=COLS_DRIFT_NUM, categorical_columns=COLS_DRIFT_CAT)
+    prep = lambda d: d[COLS_DRIFT].assign(unspsc_familia=d.unspsc_familia.astype(str))  # noqa: E731
+    snap = Report([DataDriftPreset(columns=COLS_DRIFT)]).run(
+        current_data=Dataset.from_pandas(prep(hoy), data_definition=dd),
+        reference_data=Dataset.from_pandas(prep(referencia), data_definition=dd),
+    )
+    resumen = {"features": {}, "n_hoy": len(hoy), "n_referencia": len(referencia)}
+    for m in snap.dict()["metrics"]:
+        nombre, valor = str(m.get("metric_id") or m.get("metric_name")), m.get("value")
+        if nombre.startswith("DriftedColumnsCount"):
+            resumen["drift_features"], resumen["drift_share"] = int(valor["count"]), float(valor["share"])
+        elif nombre.startswith("ValueDrift(column="):
+            col = nombre.split("column=")[1].split(",")[0]
+            resumen["features"][col] = {"distancia": float(valor), "metodo": nombre.split("method=")[1].split(",")[0]}
+    return snap, resumen
+
+
+def drift_del_dia(muestra: list[pd.DataFrame], fecha_corte: str) -> dict:
+    import tempfile
+
+    import boto3
+
+    s3 = boto3.client("s3")
+    with tempfile.TemporaryDirectory() as tmp:
+        s3.download_file(BUCKET, REFERENCIA_DRIFT, f"{tmp}/ref.parquet")
+        snap, resumen = reporte_drift(pd.concat(muestra, ignore_index=True), pd.read_parquet(f"{tmp}/ref.parquet"))
+        base = f"monitoreo/drift/fecha={fecha_corte}/"
+        snap.save_html(f"{tmp}/drift.html")
+        s3.upload_file(f"{tmp}/drift.html", BUCKET, base + "drift.html", ExtraArgs={"ContentType": "text/html"})
+        s3.put_object(Bucket=BUCKET, Key=base + "resumen.json", Body=json.dumps(resumen, indent=1).encode())
+    publicar_metricas({"drift_features": resumen["drift_features"], "drift_share": resumen["drift_share"]})
+    resumen["s3"] = f"s3://{BUCKET}/{base}drift.html"
+    return resumen
+
+
+def publicar_metricas(valores: dict[str, float], cliente=None) -> None:
+    """Métricas de volumen en CloudWatch (namespace Secop). Solo se envían cuando hubo publicación: una noche
+    sin publicar deja la métrica vacía y la alarma secop-sin-publicacion lo detecta."""
+    if cliente is None:
+        import boto3
+
+        cliente = boto3.client("cloudwatch")
+    datos = [
+        {"MetricName": k, "Value": float(v), "Unit": "Count" if k != "duracion_min" else "None"}
+        for k, v in valores.items()
+    ]
+    cliente.put_metric_data(Namespace=NAMESPACE, MetricData=datos)
+
+
 def copia_gold(listas: pd.DataFrame, fecha_corte: str, version_id: int) -> None:
     import awswrangler as wr
 
@@ -464,7 +535,9 @@ def leer_historia(d: Path):
     }
 
 
-def calcular_listas(tablas, procesos, grupos, abiertos, fecha_corte, modelos, lote_empresas, max_pares):
+def calcular_listas(
+    tablas, procesos, grupos, abiertos, fecha_corte, modelos, lote_empresas, max_pares, muestra_drift=None
+):
     """recuperar (por lotes) → liberar HistoriaRetrieval → construir/rankear/armar_listas (por lotes)."""
     from ml.features import COLS_CONTRATOS, COLS_PROVEEDORES, Historia
     from ml.features import COLS_PROCESOS as CPF
@@ -494,7 +567,7 @@ def calcular_listas(tablas, procesos, grupos, abiertos, fecha_corte, modelos, lo
             proveedores=prov[[c for c in COLS_PROVEEDORES if c in prov.columns]],
         )
         del base
-        listas = puntuar_por_lotes(cand, h, modelos["pgana"], modelos["ranking"], max_pares)
+        listas = puntuar_por_lotes(cand, h, modelos["pgana"], modelos["ranking"], max_pares, muestra_drift)
         del h
     return listas
 
@@ -540,6 +613,7 @@ def correr(a) -> int:
         modelos, versiones = cargar_modelos()
     log(f"   {versiones}")
 
+    muestra_drift: list[pd.DataFrame] = []
     listas = calcular_listas(
         tablas,
         procesos,
@@ -549,6 +623,7 @@ def correr(a) -> int:
         modelos,
         a.lote_empresas,
         a.max_pares,
+        muestra_drift,
     )
     listas["motivos"] = [motivos(r) for r in listas.itertuples(index=False)]
     huella = sha256_listas(listas)
@@ -590,9 +665,27 @@ def correr(a) -> int:
         with etapa("copia en gold.recomendaciones"):
             copia_gold(listas, fecha_corte, version_id)
 
+    lista2_media = float(l2.reindex(listas.proveedor_key.unique(), fill_value=0).mean())
+    if not a.sin_publicar:
+        with etapa("métricas de volumen en CloudWatch"):
+            publicar_metricas(
+                {
+                    "empresas_puntuadas": n_emp,
+                    "procesos_abiertos": len(abiertos),
+                    "largo_medio_lista2": lista2_media,
+                    "duracion_min": (time.time() - T0) / 60,
+                    "publicacion": 1,
+                }
+            )
+        try:
+            with etapa("drift (Evidently) frente al entrenamiento"):
+                d = drift_del_dia(muestra_drift, fecha_corte)
+            log(f"   drift: {d['drift_features']} de {len(COLS_DRIFT)} features ({d['drift_share']:.0%}) → {d['s3']}")
+        except Exception as e:  # monitoreo: no tumba una publicación que ya está hecha
+            log(f"   ERROR en el reporte de drift (las listas ya están publicadas): {type(e).__name__}: {e}")
     log(
         f"RESUMEN fecha_corte={fecha_corte} empresas={n_emp:,} procesos_abiertos={len(abiertos):,} "
-        f"lista2_media={l2.reindex(listas.proveedor_key.unique(), fill_value=0).mean():.2f} "
+        f"lista2_media={lista2_media:.2f} "
         f"duracion={(time.time() - T0) / 60:.1f} min pico={pico_gb():.1f} GB sha256={huella[:16]}"
     )
     return 0
