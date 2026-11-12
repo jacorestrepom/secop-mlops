@@ -96,7 +96,7 @@ EventBridge Scheduler secop-nocturno-diario (07:30 America/Bogota)
   └► Step Functions secop-nocturno
        1. Glue secop-silver-procesos (E3: reescribe secop_silver.procesos desde bronze)
        2. Glue secop-silver-ganador  (E6: completa ganador, estado, sector_entidad, n_proponentes)
-       3. ECS Fargate secop-score    (jobs/score.py, 4 vCPU / 30 GB / 50 GB de disco)
+       3. ECS Fargate secop-score:3  (jobs/score.py, 4 vCPU / 30 GB / 50 GB de disco)
      2 reintentos por paso con backoff; si un paso se agota → estado Falla, sin publicar
   └► si termina en FAILED / TIMED_OUT / ABORTED: regla secop-nocturno-fallo → SNS secop-alertas (correo)
 Alarma secop-api-errores (Errors de la Lambda > 0 en 5 min) → SNS secop-alertas
@@ -111,7 +111,7 @@ Alarma secop-api-errores (Errors de la Lambda > 0 en 5 min) → SNS secop-alerta
 5. `recuperar()` **por lotes de 10.000 empresas** (calientes y frías en lotes separados) → libera la historia del retrieval → `construir()` / `rankear()` / `armar_listas()` **por lotes de ~1 millón de pares**, con los modelos `models:/secop-*@production` leídos del registro de MLflow directo en PostgreSQL (sin la EC2).
 6. **Motivos** (Paso 5 de la guía, en orden y máximo 3): misma entidad · entidad nueva (lista 2) · ≤ 3 oferentes esperados · precio dentro del rango que suele ganar (\|log\| ≤ 1,4) · similitud con procesos ganados (`knn_max_sim_ganado` ≥ 0,5, umbral provisional que valida ML).
 7. **Publica** en RDS con `publicar.py` (atómico; sin personas naturales; métricas de `/metadata` desde [`jobs/metricas_v1.json`](jobs/metricas_v1.json)) y deja una copia en Parquet en `s3://…/gold/recomendaciones/` (tabla `secop_gold.recomendaciones`, partición `fecha_corte`, `overwrite_partitions`).
-8. Registra tiempo y memoria de cada etapa y una línea `RESUMEN` en `/secop/jobs`.
+8. Envía las métricas de volumen a CloudWatch, genera el reporte de drift (ver [Monitoreo](#monitoreo)) y registra tiempo y memoria de cada etapa con una línea `RESUMEN` en `/secop/jobs`.
 
 **Verificado (2026-11-11):**
 - Por lotes da **exactamente** lo mismo que de una vez: marzo de 2026, 10.607 jurídicas, incluidos lotes de solo-frías con centinelas; sha256 idéntico. Quitar las personas naturales no cambia las listas de las jurídicas.
@@ -141,6 +141,21 @@ aws ecs run-task --profile secop --cluster secop --task-definition secop-score -
 Opciones de `score.py`: `--sin-publicar` (calcula todo y no publica), `--muestra N` (solo N empresas), `--verificar-lotes 2026-03-01` (la prueba de lotes). Correr el flujo completo: `aws stepfunctions start-execution --profile secop --state-machine-arn arn:aws:states:us-east-1:$AWS_ACCOUNT_ID:stateMachine:secop-nocturno`. Los logs quedan en CloudWatch, grupo `/secop/jobs`.
 
 **Referencia de paridad:** `python -m jobs.referencia` (en Fargate, con la misma imagen) corre `tests/referencia/generar_referencia.py` dos veces y, si el `sha256.txt` es idéntico, la sube a `s3://…/ci/referencia/` (9 MB, 300 empresas de marzo). Todavía no la usa el CI.
+
+## Monitoreo
+
+Todo avisa al tema SNS `secop-alertas` (correo confirmado).
+
+| Qué | Cómo | Alarma |
+|---|---|---|
+| El flujo nocturno terminó | Regla EventBridge `secop-nocturno-fallo` sobre la Step Functions | `FAILED`, `TIMED_OUT` o `ABORTED` |
+| La API responde | Alarma `secop-api-errores` | `Errors` de la Lambda > 0 en 5 min |
+| Volumen | `score.py` envía a CloudWatch (namespace `Secop`) `empresas_puntuadas`, `procesos_abiertos`, `largo_medio_lista2`, `duracion_min` y `publicacion` (solo cuando publica) | `secop-procesos-abiertos-bajos`: `procesos_abiertos` < 300 · `secop-sin-publicacion`: ninguna publicación en 26 h (métrica ausente = alarma) |
+| Drift (Paso 8) | Al final de `score.py`, reporte [Evidently](https://github.com/evidentlyai/evidently) 0.7.23 de ~24 mil pares de hoy frente a una muestra fija de 24 mil candidatos del entrenamiento (jul 2024 – jun 2025, `s3://…/monitoreo/drift/referencia_v1.parquet`) en `score_retrieval`, `knn_tasa50`, `knn_tasa5`, `unspsc_familia`, `dias_ult_part_ok` y `comp_entmod_media`. HTML y `resumen.json` en `s3://…/monitoreo/drift/fecha=<fecha_corte>/`; `drift_features` y `drift_share` en CloudWatch | — (se lee; si falla, no tumba la publicación) |
+
+Primer reporte (2026-11-11): **6 de 6 features con drift**. Es esperable y no indica un error: hoy hay solo 436 procesos abiertos, muy concentrados en pocas categorías (`unspsc_familia` 0,74; `comp_entmod_media` 0,61); entran 15 mil empresas frías que no estaban en el entrenamiento (`score_retrieval` 0,46); y el historial congelado hace crecer los días desde la última participación (`dias_ult_part_ok` 0,36). El reporte refleja justo los dos pendientes conocidos: la historia congelada y la ingesta.
+
+Costo: 7 métricas propias ≈ USD 2,10 al mes y 3 alarmas ≈ USD 0,30 al mes.
 
 ## CI (GitHub Actions)
 
@@ -206,6 +221,6 @@ TEST_DATABASE_URL=postgresql://postgres:prueba@localhost:55432/secop .venv/bin/p
 - [x] API leyendo de RDS en menos de 300 ms (~110 ms con la conexión abierta; frío ~5 s)
 - [x] Step Functions programado con reintentos y alarma (`secop-nocturno` a las 07:30 de Bogotá; alertas por SNS al correo)
 - [x] GitHub Actions: lint, tests, build y despliegue (API y job)
-- [ ] Reporte de drift diario en S3
+- [x] Reporte de drift diario en S3 (Evidently en `score.py`) y métricas de volumen con alarmas
 - [ ] Reentrenamiento de punta a punta con compuerta de promoción
 - [x] Plan B con docker-compose probado en un portátil (volcado de la publicación vigente desde RDS + API local)
