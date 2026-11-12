@@ -82,6 +82,11 @@ jobs:
       - name: Build y push de secop-jobs a ECR
         run: |
           IMAGEN=${{ steps.ecr.outputs.registry }}/secop-jobs:${GITHUB_SHA::7}
+          # Una etiqueta del job no se reescribe: la task definition y la referencia de paridad apuntan a ella
+          if docker manifest inspect "$IMAGEN" >/dev/null 2>&1; then
+            echo "$IMAGEN ya existe en ECR: no se reconstruye"
+            exit 0
+          fi
           docker build --platform linux/amd64 --provenance=false --sbom=false -f infra/jobs.Dockerfile -t "$IMAGEN" .
           docker push "$IMAGEN"
       - name: Actualizar la Lambda
