@@ -1,26 +1,133 @@
 {
-  "Comment": "Flujo nocturno del recomendador SECOP: silver procesos (E3) → ganador (E6) → score.py en Fargate. Si cualquier paso falla tras sus reintentos, termina en Falla y no publica (la API sigue con la versión anterior). Los valores ${...} se reemplazan al desplegar (README).",
-  "StartAt": "SilverProcesos",
+  "Comment": "Flujo nocturno del recomendador SECOP: ingesta de procesos recientes → silver procesos (E3) → ganador (E6) → score.py en Fargate. Si E3, E6 o score fallan tras sus reintentos, termina en Falla y no publica (la API sigue con la versión anterior); si falla la ingesta de recientes, avisa y sigue. Los valores ${...} se reemplazan al desplegar (README).",
+  "StartAt": "IngestaRecientes",
   "TimeoutSeconds": 10800,
   "States": {
+    "IngestaRecientes": {
+      "Type": "Task",
+      "Comment": "jobs/ingesta_recientes.py: procesos publicados en los últimos 45 días a bronze (part-recientes-*). Compensa la Lambda de ingesta, que se corta antes de llegar a los procesos nuevos. Si falla, se avisa y la noche sigue con lo que ya hay en bronze.",
+      "Resource": "arn:aws:states:::ecs:runTask.sync",
+      "Parameters": {
+        "Cluster": "${CLUSTER_ARN}",
+        "TaskDefinition": "${TASK_DEFINITION_ARN}",
+        "LaunchType": "FARGATE",
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "Subnets": ${SUBNETS},
+            "SecurityGroups": [
+              "${SG_JOBS}"
+            ],
+            "AssignPublicIp": "ENABLED"
+          }
+        },
+        "PropagateTags": "TASK_DEFINITION",
+        "Overrides": {
+          "Cpu": "1024",
+          "Memory": "2048",
+          "ContainerOverrides": [
+            {
+              "Name": "score",
+              "Command": [
+                "python",
+                "-m",
+                "jobs.ingesta_recientes",
+                "--dias",
+                "45"
+              ]
+            }
+          ]
+        }
+      },
+      "ResultPath": "$.ingesta_recientes",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "IntervalSeconds": 120,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error_ingesta",
+          "Next": "AvisoIngesta"
+        }
+      ],
+      "Next": "SilverProcesos"
+    },
+    "AvisoIngesta": {
+      "Type": "Task",
+      "Comment": "La ingesta de recientes falló tras sus reintentos: se avisa y se sigue (no tumba la noche).",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "${SNS_TOPIC_ARN}",
+        "Subject": "SECOP: falló la ingesta de procesos recientes",
+        "Message.$": "States.Format('La ingesta de procesos recientes (jobs/ingesta_recientes.py) falló tras 2 reintentos en la ejecución {}. La noche sigue con lo que ya hay en bronze (Lambda de ingesta). Error: {}', $$.Execution.Name, States.JsonToString($.error_ingesta))"
+      },
+      "ResultPath": null,
+      "Next": "SilverProcesos"
+    },
     "SilverProcesos": {
       "Type": "Task",
       "Comment": "Reescribe secop_silver.procesos desde bronze (deja estado preliminar y sin sector_entidad).",
       "Resource": "arn:aws:states:::glue:startJobRun.sync",
-      "Parameters": { "JobName": "secop-silver-procesos" },
+      "Parameters": {
+        "JobName": "secop-silver-procesos"
+      },
       "ResultPath": "$.silver_procesos",
-      "Retry": [{ "ErrorEquals": ["States.ALL"], "IntervalSeconds": 120, "MaxAttempts": 2, "BackoffRate": 2.0 }],
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "Falla" }],
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "IntervalSeconds": 120,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "Falla"
+        }
+      ],
       "Next": "SilverGanador"
     },
     "SilverGanador": {
       "Type": "Task",
       "Comment": "Completa ganador, estado, sector_entidad y n_proponentes. Debe correr después de E3.",
       "Resource": "arn:aws:states:::glue:startJobRun.sync",
-      "Parameters": { "JobName": "secop-silver-ganador" },
+      "Parameters": {
+        "JobName": "secop-silver-ganador"
+      },
       "ResultPath": "$.silver_ganador",
-      "Retry": [{ "ErrorEquals": ["States.ALL"], "IntervalSeconds": 120, "MaxAttempts": 2, "BackoffRate": 2.0 }],
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "Falla" }],
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "IntervalSeconds": 120,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "Falla"
+        }
+      ],
       "Next": "Score"
     },
     "Score": {
@@ -34,18 +141,39 @@
         "NetworkConfiguration": {
           "AwsvpcConfiguration": {
             "Subnets": ${SUBNETS},
-            "SecurityGroups": ["${SG_JOBS}"],
+            "SecurityGroups": [
+              "${SG_JOBS}"
+            ],
             "AssignPublicIp": "ENABLED"
           }
         },
         "PropagateTags": "TASK_DEFINITION"
       },
       "ResultPath": "$.score",
-      "Retry": [{ "ErrorEquals": ["States.ALL"], "IntervalSeconds": 300, "MaxAttempts": 2, "BackoffRate": 2.0 }],
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "Falla" }],
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "IntervalSeconds": 300,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "Falla"
+        }
+      ],
       "Next": "Publicado"
     },
-    "Publicado": { "Type": "Succeed" },
+    "Publicado": {
+      "Type": "Succeed"
+    },
     "Falla": {
       "Type": "Fail",
       "Error": "SecopNocturnoFallo",

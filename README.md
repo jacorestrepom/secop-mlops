@@ -4,7 +4,7 @@ Servicio del recomendador SECOP: cada noche calcula las dos listas de cada empre
 
 ```
 api/     FastAPI: rutas, esquemas Pydantic (contrato con la web) y orígenes de datos (simulada / rds)
-jobs/    score.py (job nocturno + métricas + drift), publicar.py, registrar_v1.py, promover.py (compuerta), referencia.py, ingesta_recientes.py (sin desplegar)
+jobs/    score.py (job nocturno + métricas + drift), ingesta_recientes.py, publicar.py, registrar_v1.py, promover.py (compuerta), referencia.py
 ml/      paquete del modelo: features, retrieval, ranking, listas (PR de ML)
 infra/   sql/serving.sql, jobs.Dockerfile (imagen secop-jobs), stepfunctions/secop-nocturno.asl.json, docker-compose (plan B)
 tests/   API (simulada y RDS), publicación atómica y paridad del modelo
@@ -94,10 +94,12 @@ Abrir http://localhost:5001. Se usa el puerto local **5001** porque en macOS el 
 ```
 EventBridge Scheduler secop-nocturno-diario (07:30 America/Bogota)
   └► Step Functions secop-nocturno
+       0. ECS Fargate IngestaRecientes (jobs/ingesta_recientes.py, 1 vCPU / 2 GB): procesos de los últimos 45 días
+          a bronze. Si falla tras 2 reintentos → aviso a SNS secop-alertas y la noche SIGUE con lo que hay en bronze
        1. Glue secop-silver-procesos (E3: reescribe secop_silver.procesos desde bronze)
        2. Glue secop-silver-ganador  (E6: completa ganador, estado, sector_entidad, n_proponentes)
        3. ECS Fargate secop-score:3  (jobs/score.py, 4 vCPU / 30 GB / 50 GB de disco)
-     2 reintentos por paso con backoff; si un paso se agota → estado Falla, sin publicar
+     2 reintentos por paso con backoff; si E3, E6 o score se agotan → estado Falla, sin publicar
   └► si termina en FAILED / TIMED_OUT / ABORTED: regla secop-nocturno-fallo → SNS secop-alertas (correo)
 Alarma secop-api-errores (Errors de la Lambda > 0 en 5 min) → SNS secop-alertas
 ```
@@ -125,7 +127,7 @@ Alarma secop-api-errores (Errors de la Lambda > 0 en 5 min) → SNS secop-alerta
 >
 > **Filtro de servicio (no cambia el modelo):** solo se recomiendan procesos con `estado='abierto'`; los cancelados y los cerrados sin adjudicar no se ofrecen aunque su fecha límite no haya pasado.
 
-**Costo por noche** (ejecución completa de `secop-nocturno` el 2026-11-11, **33 min** de punta a punta: E3 6,7 min · E6 3,8 min · score 22,3 min): Glue E3 + E6 ≈ 5.180 DPU-segundos ≈ **USD 0,63**; Fargate ≈ 22 min con 4 vCPU / 30 GB ≈ **USD 0,11**; Step Functions, Scheduler, SNS y EventBridge entran en el nivel gratuito. **Total ≈ USD 0,74 por noche (≈ USD 22 al mes)**, más RDS (≈ USD 14 al mes, todo el tiempo).
+**Costo por noche** (ejecución completa de `secop-nocturno` del 2026-11-12, con la ingesta: **38 min** de punta a punta, ingesta 5,2 min · E3 6,1 · E6 3,9 · score 22,9): ingesta en Fargate (1 vCPU / 2 GB) ≈ USD 0,004; Glue E3 + E6 ≈ 5.400 DPU-segundos ≈ **USD 0,66**; `score.py` en Fargate ≈ 23 min con 4 vCPU / 30 GB ≈ **USD 0,11**; Step Functions, Scheduler, SNS y EventBridge entran en el nivel gratuito. **Total ≈ USD 0,78 por noche (≈ USD 23 al mes)**, más RDS (≈ USD 14 al mes, todo el tiempo) y las métricas y alarmas (≈ USD 2,40 al mes).
 
 **Correr `score.py` a mano** (la misma tarea que lanza la Step Functions):
 
@@ -173,15 +175,19 @@ Costo: 7 métricas propias ≈ USD 2,10 al mes y 3 alarmas ≈ USD 0,30 al mes.
 
 **Pendiente: el reentrenamiento real.** Los scripts `train_retrieval.py`, `train_g1.py` y `train_ranking.py` no existen todavía: el código de entrenamiento sigue en el notebook final y el del retrieval en el notebook 03. Además necesita más de 18 GB (construir las features de 12 meses de candidatos), y la celda que crea `base_entrenamiento` se perdió. Cuando ML los entregue, el ciclo mensual sería: entrenar en Fargate → registrar con alias `staging` → `promover.py`. Para ranking y retrieval, el script de entrenamiento tendrá que registrar también las métricas de pymes.
 
-## Ingesta de procesos recientes (preparada, sin desplegar)
+## Ingesta de procesos recientes (paso 0 de la noche)
 
-**El problema:** desde el 26-oct casi no entran procesos nuevos a silver (346, 189 y 5 por semana, frente a ~2.400 antes). La Lambda `proyecto-integrador-ingesta` (de ingeniería de datos) pide `procesos-contratacion` por `:updated_at >= watermark`. SECOP reescribe `:updated_at` en millones de filas al día y la Lambda se corta en ~200 mil, casi todas de procesos viejos (en un archivo de la Lambda del 11-nov, las fechas de publicación van de 2015 a 2026).
+**Por qué existe:** hasta el 26-oct entraban ~2.400 procesos nuevos por semana a silver, y después cayeron a 346, 189 y 5. La Lambda `proyecto-integrador-ingesta` (de ingeniería de datos) pide `procesos-contratacion` por `:updated_at >= watermark`. SECOP reescribe `:updated_at` en millones de filas al día y la Lambda se corta en ~200 mil, casi todas de procesos viejos (en un archivo suyo del 11-nov, las fechas de publicación van de 2015 a 2026). Así casi nunca llegaba a los procesos nuevos.
 
-**La propuesta:** [`jobs/ingesta_recientes.py`](jobs/ingesta_recientes.py) pide solo lo publicado en los últimos 45 días (`fecha_de_publicacion_del`), con la misma paginación keyset y el mismo formato que la Lambda, y escribe `part-recientes-*.json.gz` en `bronze/procesos-contratacion/ingesta/fecha=<hoy>/`. `secop-silver-procesos` lee toda esa carpeta y su regla R4 deja una fila por `id_proceso` (gana la versión más reciente), así que no duplica lo que traiga la Lambda.
+**Qué hace:** [`jobs/ingesta_recientes.py`](jobs/ingesta_recientes.py) pide a la API de Socrata (dataset `p6dx-8zbt`) solo lo publicado en los últimos 45 días (`fecha_de_publicacion_del`), con la misma paginación keyset (`$order=:updated_at,:id`) y el mismo formato que la Lambda (NDJSON en gzip, todas las columnas). Escribe `part-recientes-*.json.gz` en `bronze/procesos-contratacion/ingesta/fecha=<hoy UTC>/`, junto a los archivos de la Lambda, que no se tocan. `secop-silver-procesos` lee toda esa carpeta y su regla R4 deja una fila por `id_proceso` (gana la versión más reciente), así que no duplica. Autorizado por ingeniería de datos (Juan Diego) el 2026-11-12.
 
-**Probado solo en local (2026-11-12),** escribiendo en una carpeta temporal: 216.165 filas en 22 páginas, 13,6 min, 59 MB. Publicados del 28-sep al 10-nov, ~35 mil por semana, incluidas las semanas que hoy faltan. Las 61 columnas del archivo real de la Lambda están todas; hay 2 más (`fecha_de_publicacion_fase*`) porque Socrata omite los campos nulos. El 89 % son modalidades que E3 descarta por alcance; filtrarlas en la consulta bajaría mucho el tiempo.
+**Permisos:** el rol `secop-jobs-tarea` puede leer el token `/secop/app-token` (SSM) y escribir **solo** `bronze/procesos-contratacion/ingesta/*/part-recientes-*`.
 
-**Para desplegarla** (no está aplicado): reemplazar la definición de la Step Functions por [`infra/stepfunctions/secop-nocturno-con-ingesta.asl.json`](infra/stepfunctions/secop-nocturno-con-ingesta.asl.json), que agrega un paso ECS `IngestaRecientes` antes de E3 con la misma imagen y 1 vCPU / 2 GB, y agregar al rol `secop-jobs-tarea` los permisos de [`infra/stepfunctions/ingesta_recientes_permisos.json`](infra/stepfunctions/ingesta_recientes_permisos.json) (token en SSM y escritura solo de `part-recientes-*`). Costo ≈ USD 0,01 por noche. Requiere el visto bueno de ingeniería de datos, porque escribe en su capa bronze.
+**Primera corrida (2026-11-12, a mano en Fargate):** 216.165 filas en 22 archivos, 5,7 min. Después de E3 + E6: `cuadre_ok = true`, `secop_silver.procesos` pasó de 618.850 a **623.592** filas, **0 `id_proceso` duplicados**, y las semanas desde el 26-oct pasaron de 346 / 189 / 5 a **3.037 / 2.603 / 780** procesos.
+
+**Primera noche completa con la ingesta (2026-11-12, Step Functions a mano):** `SUCCEEDED` en 38 min. **2.089 procesos abiertos** (antes 436 el 11-nov y 369 en la corrida de las 07:30 del 12-nov), 6.270 procesos nuevos frente a la historia, 35.642 empresas con lista (antes 29.994), 508.269 recomendaciones (versión 8), drift en 4 de 6 features (antes 6 de 6).
+
+Mejora posible: el 89 % de lo que baja son modalidades que E3 descarta por alcance (sobre todo régimen especial y contratación directa). Filtrarlas en la consulta bajaría el tiempo, sin cambiar el resultado.
 
 ## CI (GitHub Actions)
 
@@ -249,5 +255,5 @@ TEST_DATABASE_URL=postgresql://postgres:prueba@localhost:55432/secop .venv/bin/p
 - [x] GitHub Actions: lint, tests, build y despliegue (API y job)
 - [x] Reporte de drift diario en S3 (Evidently en `score.py`) y métricas de volumen con alarmas
 - [ ] Reentrenamiento de punta a punta con compuerta de promoción: **la compuerta está hecha y demostrada** (`jobs/promover.py`); faltan los `train_*.py` (el entrenamiento sigue en los notebooks y necesita más de 18 GB)
-- [ ] Ingesta de procesos recientes (`jobs/ingesta_recientes.py`): preparada y probada en local, **sin desplegar** (espera el visto bueno de ingeniería de datos)
+- [x] Ingesta de procesos recientes (`jobs/ingesta_recientes.py`), paso 0 de la Step Functions; si falla, avisa y la noche sigue
 - [x] Plan B con docker-compose probado en un portátil (volcado de la publicación vigente desde RDS + API local)
