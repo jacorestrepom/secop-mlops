@@ -4,7 +4,10 @@
 # - En push a main: lo mismo y, si pasa, build linux/amd64 → ECR (etiqueta = hash corto del commit) de secop-api y
 #   secop-jobs → Lambda con la nueva secop-api → verificación de /health. La task definition secop-score apunta a
 #   una etiqueta fija: cambiar de imagen del job es registrar una revisión nueva (a mano, con su prueba).
-# Credenciales por OIDC (rol secop-github-deploy, solo main): no hay llaves en GitHub.
+# - En pull requests y en main: job paridad (tests/test_paridad.py dentro de la imagen secop-jobs, contra la
+#   referencia de s3://…/ci/referencia/ y los artefactos de modelos/v1/), con el rol de SOLO lectura
+#   secop-github-ci-lectura. Los PRs desde forks no reciben token OIDC: ahí se salta.
+# Credenciales por OIDC (secop-github-deploy solo desde main; secop-github-ci-lectura): no hay llaves en GitHub.
 name: CI
 
 on:
@@ -51,6 +54,29 @@ jobs:
         run: |
           docker build --platform linux/amd64 --provenance=false -f api/Dockerfile -t secop-api:pr .
           docker build --platform linux/amd64 --provenance=false -f infra/jobs.Dockerfile -t secop-jobs:pr .
+
+  paridad:
+    # Paridad exacta de ml/ (marzo de 2026, 300 empresas) dentro de la imagen del job, la misma en la que se generó
+    # la referencia en Fargate. Necesita ~1 GB de S3 y ~10 GB de memoria (la historia se carga completa).
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/secop-github-ci-lectura
+          aws-region: us-east-1
+      - name: Imagen secop-jobs
+        run: docker build --platform linux/amd64 --provenance=false -f infra/jobs.Dockerfile -t secop-jobs:paridad .
+      - name: Prueba de paridad
+        run: |
+          free -g
+          docker run --rm -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_REGION \
+            secop-jobs:paridad sh -c "pip install --quiet --user pytest==8.3.5 && python -m jobs.paridad_ci"
 
   desplegar:
     needs: pruebas

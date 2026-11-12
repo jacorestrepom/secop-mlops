@@ -101,7 +101,7 @@ EventBridge Scheduler secop-nocturno-diario (07:30 America/Bogota)
        3. Glue secop-silver-proveedores  opcional           │ la tabla queda con su versión anterior
        4. Glue secop-silver-contratos    opcional     (E5)  ┘
        5. Glue secop-silver-ganador      OBLIGATORIO  (E6: ganador, estado, sector_entidad, n_proponentes)
-       6. ECS Fargate secop-score:5      OBLIGATORIO  (jobs/score.py, 4 vCPU / 30 GB / 50 GB de disco)
+       6. ECS Fargate secop-score:6      OBLIGATORIO  (jobs/score.py, 4 vCPU / 30 GB / 50 GB de disco)
      2 reintentos por paso con backoff; si un paso obligatorio se agota → estado Falla, sin publicar
   └► si termina en FAILED / TIMED_OUT / ABORTED: regla secop-nocturno-fallo → SNS secop-alertas (correo)
 Alarma secop-api-errores (Errors de la Lambda > 0 en 5 min) → SNS secop-alertas
@@ -216,8 +216,10 @@ Costo: 7 métricas propias ≈ USD 2,10 al mes y 3 alarmas ≈ USD 0,30 al mes.
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
 
-- **En cada pull request:** `ruff`, `pytest` (con un PostgreSQL 16 de servicio para las pruebas de publicación y de la fuente RDS; la de paridad se salta si no hay `SECOP_DATA_DIR`) y build de las dos imágenes (`secop-api` y `secop-jobs`) sin push.
+- **En cada pull request:** `ruff`, `pytest` (con un PostgreSQL 16 de servicio para las pruebas de publicación y de la fuente RDS; la de paridad se salta aquí porque no hay `SECOP_DATA_DIR`: corre en el job `paridad`) y build de las dos imágenes (`secop-api` y `secop-jobs`) sin push.
 - **En push a `main`:** lo mismo y, si pasa, build `linux/amd64` → ECR `secop-api:<hash corto>` y `secop-jobs:<hash corto>` (una etiqueta existente de `secop-jobs` no se reescribe) → `update-function-code` de la Lambda → comprueba que `/health` responda `base_datos: ok`. La task definition `secop-score` apunta a una etiqueta fija de `secop-jobs`: cambiar la imagen del job es registrar una revisión nueva, probarla y actualizar la Step Functions.
+- **Job `paridad`, en cada pull request y en `main`:** construye la imagen `secop-jobs` y, dentro de ella (el mismo entorno en el que se generó la referencia en Fargate: linux/amd64, mismas librerías, hilos fijos), corre [`jobs/paridad_ci.py`](jobs/paridad_ci.py). El script baja la referencia de `s3://…/ci/referencia/` (verifica su `sha256.txt`), arma `data/` con `modelos/v1/` (historia verificada contra su manifiesto, M1, G1, ranking v2 y `config.json`), corre `tests/test_paridad.py` con `SECOP_REFERENCIA_DIR` y `SECOP_DATA_DIR` y escribe una línea `RESUMEN paridad` con el tiempo y la memoria pico. Corre las cuatro etapas contra la referencia (candidatos, features, puntuados y listas) y `config.json`. Las dos pruebas contra el notebook (`cand_`/`pred_` de marzo) necesitan archivos que no están en `modelos/v1/`: se excluyen en el CI y siguen corriendo en local con `data/final` completo. En una prueba previa en Fargate con el tamaño del runner (4 vCPU / 16 GB): 5 pruebas en 3,5 min, 8,1 GB de pico. Los PRs desde forks no reciben token OIDC y no corren este job. Baja ≈ 1 GB de S3 por corrida: dentro de los 100 GB gratis de salida al mes y después ≈ USD 0,09 por corrida. No usa caché de Actions, porque en un repo público un PR desde un fork podría restaurarla.
+- Rol **`secop-github-ci-lectura`** (OIDC, cualquier rama o PR de `jacorestrepom/secop-mlops`; el `sub` se acepta en los dos formatos de GitHub, el clásico y el inmutable con IDs): solo `s3:GetObject` en `ci/referencia/*` y `modelos/v1/*`, y `s3:ListBucket` limitado a esas dos carpetas. Nada de escritura: lo verifiqué con `simulate-principal-policy` (Put y Delete en esas carpetas, lectura de `bronze/` y `modelos/v2/`, ECR y Lambda dan `implicitDeny`).
 - Credenciales por **OIDC**: el rol `secop-github-deploy` solo lo puede asumir `jacorestrepom/secop-mlops` desde `refs/heads/main`, y solo puede subir imágenes a `secop-api`/`secop-jobs` y actualizar el código de `secop-api`. No hay llaves en GitHub; el workflow solo usa la variable del repo `AWS_ACCOUNT_ID`.
 
 ## Plan B de la demo (sin AWS)
@@ -267,7 +269,7 @@ TEST_DATABASE_URL=postgresql://postgres:prueba@localhost:55432/secop .venv/bin/p
 
 - [x] Credenciales configuradas y prueba de Athena (perfil `secop`)
 - [x] Artefactos del modelo en `s3://proyecto-integrador-bucket-01/modelos/v1/` (G1, ranking v2, config, listas, métricas y `manifest.sha256`); el M1 está en `modelos/v1/retrieval/`. El bucket no tiene versionado: `v1/` no se reescribe, una versión nueva va a `v2/`
-- [x] Paquete `ml/` con prueba de paridad (PR #1 de ML); referencia de paridad generada en Fargate y subida a `s3://…/ci/referencia/` (falta conectarla al CI)
+- [x] Paquete `ml/` con prueba de paridad (PR #1 de ML); referencia de paridad generada en Fargate y subida a `s3://…/ci/referencia/`; corre en el CI (job `paridad`) en cada PR y en `main`
 - [x] MLflow con los tres modelos y alias `production` (`secop-retrieval`, `secop-pgana`, `secop-ranking`, versión 1, con el snapshot de silver)
 - [x] API simulada publicada con el contrato de la sección 6 y `/docs` (Lambda + Function URL)
 - [x] `score.py` de punta a punta para una `fecha_corte` (por lotes verificados contra marzo; idempotente y determinista)
@@ -275,7 +277,7 @@ TEST_DATABASE_URL=postgresql://postgres:prueba@localhost:55432/secop .venv/bin/p
 - [x] Copia de las listas en `gold.recomendaciones` (Parquet particionado por `fecha_corte`)
 - [x] API leyendo de RDS en menos de 300 ms (~110 ms con la conexión abierta; frío ~5 s)
 - [x] Step Functions programado con reintentos y alarma (`secop-nocturno` a las 07:30 de Bogotá; alertas por SNS al correo)
-- [x] GitHub Actions: lint, tests, build y despliegue (API y job)
+- [x] GitHub Actions: lint, tests, paridad de `ml/` (rol de solo lectura), build y despliegue (API y job)
 - [x] Reporte de drift diario en S3 (Evidently en `score.py`) y métricas de volumen con alarmas
 - [ ] Reentrenamiento de punta a punta con compuerta de promoción: **la compuerta está hecha y demostrada** (`jobs/promover.py`); faltan los `train_*.py` (el entrenamiento sigue en los notebooks y necesita más de 18 GB)
 - [x] Ingesta de recientes (`jobs/ingesta_recientes.py`) de procesos, proponentes, contratos y proveedores, en paralelo como paso 0 de la Step Functions; si una falla, avisa y la noche sigue
