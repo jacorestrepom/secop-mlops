@@ -22,13 +22,13 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from tests.experimentos.unspsc_faltante import FECHA, MES, _procesos_del_mes, correr
+import tests.experimentos.unspsc_faltante as F
 
 UMBRALES = [0.0, 0.5, 0.7]
 SEMILLA = 42
 
 
-def entrenar(data: Path, salida: Path) -> None:
+def entrenar(data: Path, salida: Path, max_features: int = 300_000, sufijo: str = "") -> None:
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.linear_model import SGDClassifier
     from sklearn.pipeline import make_pipeline
@@ -40,14 +40,14 @@ def entrenar(data: Path, salida: Path) -> None:
         columns=["id_proceso", "fecha_publicacion", "descripcion_limpia", "unspsc_segmento", "unspsc_familia"],
     )
     p["descripcion_limpia"] = p.descripcion_limpia.fillna("")
-    antes = (pd.to_datetime(p.fecha_publicacion) < FECHA).values
+    antes = (pd.to_datetime(p.fecha_publicacion) < F.FECHA).values
     tr = p[antes & p.unspsc_familia.notna().values]
     t0 = time.time()
     modelo = make_pipeline(
         TfidfVectorizer(
             min_df=3,
             max_df=0.5,
-            max_features=300_000,
+            max_features=max_features,
             ngram_range=(1, 2),
             stop_words=STOP,
             sublinear_tf=True,
@@ -57,14 +57,14 @@ def entrenar(data: Path, salida: Path) -> None:
     )
     modelo.fit(tr.descripcion_limpia.values, tr.unspsc_familia.astype(str).values)
     t_ent = time.time() - t0
-    ruta = salida / "clasificador_unspsc.joblib"
+    ruta = salida / f"clasificador_unspsc{sufijo}.joblib"
     joblib.dump(modelo, ruta, compress=3)
     print(
-        f"entrenamiento: {len(tr):,} procesos (< {FECHA.date()}) | {tr.unspsc_familia.nunique()} familias | "
+        f"entrenamiento: {len(tr):,} procesos (< {F.FECHA.date()}) | {tr.unspsc_familia.nunique()} familias | "
         f"{t_ent:.0f} s | modelo {ruta.stat().st_size / 1e6:.1f} MB"
     )
 
-    mes = p[_procesos_del_mes(p.fecha_publicacion)].reset_index(drop=True)
+    mes = p[F._procesos_del_mes(p.fecha_publicacion)].reset_index(drop=True)
     t0 = time.time()
     proba = modelo.predict_proba(mes.descripcion_limpia.values)
     t_inf = time.time() - t0
@@ -81,10 +81,12 @@ def entrenar(data: Path, salida: Path) -> None:
         }
     )
     pred["segmento_pred"] = pred.familia_pred.str[:2]
-    pred.to_parquet(salida / "predicciones_unspsc_marzo.parquet", index=False)
+    pred.to_parquet(salida / f"predicciones_unspsc{sufijo}.parquet", index=False)
 
     real = pred[pred.familia_real.notna()]
-    print(f"\nexactitud en marzo ({len(real):,} procesos con UNSPSC real; {len(pred) - len(real):,} ya venían nulos):")
+    print(
+        f"\nexactitud en {F.MES} ({len(real):,} procesos con UNSPSC real; {len(pred) - len(real):,} ya venían nulos):"
+    )
     print("umbral | cobertura | top-1 familia | top-1 segmento (cubiertos) | familia correcta / incorrecta / nula")
     for u in UMBRALES:
         c = real.prob >= u
@@ -97,7 +99,7 @@ def entrenar(data: Path, salida: Path) -> None:
 
 
 def imputacion(salida: Path, umbral: float) -> pd.DataFrame:
-    pred = pd.read_parquet(salida / "predicciones_unspsc_marzo.parquet")
+    pred = pd.read_parquet(salida / "predicciones_unspsc.parquet")
     pasa = pred.prob >= umbral
     return pd.DataFrame(
         {
@@ -112,10 +114,10 @@ def ndcg_por_empresa(lista1: pd.DataFrame, prop_m: pd.DataFrame) -> pd.Series:
     """NDCG@10 de cada empresa (misma fórmula que ml.evaluacion.metricas_lista1, sin promediar)."""
     from ml.evaluacion import ideal_ndcg, relevancia
 
-    pm = prop_m[prop_m.mes == MES]
+    pm = prop_m[prop_m.mes == F.MES]
     ideal = pm.groupby("proveedor_key").agg(n=("gana", "size"), n2=("gana", "sum"))
     x = lista1.assign(proveedor_key=lista1.proveedor_key.astype(str))
-    x = x.assign(rel=relevancia(x, prop_m, MES))
+    x = x.assign(rel=relevancia(x, prop_m, F.MES))
     dcg = (x.rel / np.log2(x.pos + 1)).groupby(x.proveedor_key).sum()
     e = ideal.join(dcg.rename("dcg"), how="inner")
     return e.dcg / ideal_ndcg(e.n.values, e.n2.values)
@@ -134,8 +136,8 @@ def comparar(data: Path, salida: Path, umbral: float) -> None:
         L = pd.read_parquet(salida / f"listas_{v}.parquet")
         L1 = L[L.lista == "historial"]
         m = {"Recall@150 retrieval": recall_retrieval(p, pos)}
-        m.update({k: x for k, x in metricas_lista1(L1, pm, MES).items() if k != "empresas"})
-        m["% plausibles lista 2"] = pct_plausibles(L[L.lista == "oportunidad"], pm, MES) / 100
+        m.update({k: x for k, x in metricas_lista1(L1, pm, F.MES).items() if k != "empresas"})
+        m["% plausibles lista 2"] = pct_plausibles(L[L.lista == "oportunidad"], pm, F.MES) / 100
         res[v], ndcg[v] = m, ndcg_por_empresa(L1, pm)
     print(f"métrica | normal | sin UNSPSC | imputado (umbral {umbral}) | pérdida recuperada")
     for k in res["normal"]:
@@ -166,13 +168,17 @@ def main() -> None:
     ap.add_argument("--variante", choices=["imputado"])
     ap.add_argument("--comparar", action="store_true")
     ap.add_argument("--umbral", type=float, default=0.5)
+    ap.add_argument("--mes", default="2026-03-01", help="primer día del mes evaluado")
+    ap.add_argument("--max-features", type=int, default=300_000)
+    ap.add_argument("--sufijo", default="", help="sufijo de los archivos del clasificador (para comparar tamaños)")
     a = ap.parse_args()
+    F.fijar_mes(a.mes)
     data, salida = Path(a.data), Path(a.salida)
     salida.mkdir(parents=True, exist_ok=True)
     if a.entrenar:
-        entrenar(data, salida)
+        entrenar(data, salida, a.max_features, a.sufijo)
     elif a.variante:
-        correr(data, salida, "imputado", imputacion=imputacion(salida, a.umbral))
+        F.correr(data, salida, "imputado", imputacion=imputacion(salida, a.umbral))
     elif a.comparar:
         comparar(data, salida, a.umbral)
 

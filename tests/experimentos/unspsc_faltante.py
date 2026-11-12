@@ -8,6 +8,7 @@ para los procesos publicados en el mes evaluado (los candidatos); el historial q
     python -m tests.experimentos.unspsc_faltante --data <data/> --salida <dir> --variante normal
     python -m tests.experimentos.unspsc_faltante --data <data/> --salida <dir> --variante sin_unspsc
     python -m tests.experimentos.unspsc_faltante --data <data/> --salida <dir> --comparar
+    (--mes 2025-10-01 para evaluar otro mes; por defecto marzo de 2026)
 
 Cada variante corre en su propio proceso (la memoria pico del mes completo es ~18 GB).
 """
@@ -22,8 +23,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-MES, FECHA = "202603", pd.Timestamp("2026-03-01")
+MES, FECHA = "202603", pd.Timestamp("2026-03-01")  # se cambia con --mes (fijar_mes)
 COLS_UNSPSC = ["unspsc_segmento", "unspsc_familia", "unspsc_clase"]
+
+
+def fijar_mes(mes: str) -> None:
+    """mes = primer día del mes evaluado, p. ej. 2025-10-01."""
+    global MES, FECHA
+    FECHA = pd.Timestamp(mes)
+    MES = FECHA.strftime("%Y%m")
 
 
 def _procesos_del_mes(fechas: pd.Series) -> np.ndarray:
@@ -101,7 +109,7 @@ def comparar(data: Path, salida: Path) -> None:
         m.update({k: x for k, x in metricas_lista1(L[L.lista == "historial"], pm, MES).items() if k != "empresas"})
         m["% plausibles lista 2"] = pct_plausibles(L[L.lista == "oportunidad"], pm, MES) / 100
         res[v] = (m, L, p)
-    print("métrica | marzo normal | marzo sin UNSPSC | diferencia")
+    print(f"métrica | {MES} normal | {MES} sin UNSPSC | diferencia")
     for k in res["normal"][0]:
         a, b = res["normal"][0][k], res["sin_unspsc"][0][k]
         print(f"{k} | {a:.5f} | {b:.5f} | {b - a:+.5f} ({100 * (b - a) / a:+.1f} %)")
@@ -139,7 +147,9 @@ def main() -> None:
     ap.add_argument("--salida", required=True)
     ap.add_argument("--variante", choices=["normal", "sin_unspsc"])
     ap.add_argument("--comparar", action="store_true")
+    ap.add_argument("--mes", default="2026-03-01", help="primer día del mes evaluado")
     a = ap.parse_args()
+    fijar_mes(a.mes)
     data, salida = Path(a.data), Path(a.salida)
     salida.mkdir(parents=True, exist_ok=True)
     if a.comparar:
