@@ -4,7 +4,7 @@ Servicio del recomendador SECOP: cada noche calcula las dos listas de cada empre
 
 ```
 api/     FastAPI: rutas, esquemas Pydantic (contrato con la web) y orígenes de datos (simulada / rds)
-jobs/    score.py (job nocturno + métricas + drift), ingesta_recientes.py, publicar.py, registrar_v1.py, promover.py (compuerta), referencia.py
+jobs/    score.py (job nocturno + métricas + drift), ingesta_recientes.py, entrenar_unspsc.py, publicar.py, registrar_v1.py, promover.py (compuerta), referencia.py
 ml/      paquete del modelo: features, retrieval, ranking, listas (PR de ML)
 infra/   sql/serving.sql, jobs.Dockerfile (imagen secop-jobs), stepfunctions/secop-nocturno.asl.json, docker-compose (plan B)
 tests/   API (simulada y RDS), publicación atómica y paridad del modelo
@@ -76,6 +76,7 @@ job nocturno ──postgresql+psycopg2──► RDS secop-db (base mlflow)    s3
 - **El servidor no es intermediario de artefactos** (`--no-serve-artifacts`): los clientes leen y escriben S3 directamente. Por eso el job nocturno carga `models:/secop-ranking@production` con `MLFLOW_TRACKING_URI=postgresql+psycopg2://…` sin que la EC2 esté encendida. Hay que escribir `+psycopg2`: sin él, SQLAlchemy busca psycopg 3.
 - La EC2 tiene 1 worker, 2 GB de swap y `MLFLOW_SERVER_ENABLE_JOB_EXECUTION=false`: con los valores por defecto MLflow 3.18 usaba 1,6 GB de los 1,8 GB de RAM y se caía por falta de memoria.
 - Modelos registrados con [`jobs/registrar_v1.py`](jobs/registrar_v1.py): verifica los checksums de `s3://…/modelos/v1/`, registra los tres con parámetros, métricas de prueba, features en orden, `config.json`, `git_commit` y el snapshot de silver (`silver_snapshot_procesos`, `_proponentes`, `_contratos`, `_proveedores`, `silver_snapshot_fecha=2026-11-04`, `silver_copia`), pone el alias `production` y comprueba que el modelo registrado predice igual que el original (diferencia 0 sobre 1.000 filas).
+- Cuarto modelo, **`secop-unspsc`** (familia UNSPSC desde la descripción), registrado con [`jobs/entrenar_unspsc.py`](jobs/entrenar_unspsc.py) en el experimento `secop-unspsc`. Sus artefactos van a `s3://…/mlflow/secop-unspsc/`: el script crea el experimento con esa carpeta, porque con el registro leído directo de PostgreSQL un experimento nuevo tomaría `./mlruns` local y Fargate no podría cargar el modelo. Ver [Familia UNSPSC inferida](#familia-unspsc-inferida-secop-unspsc).
 
 **Abrir la interfaz de MLflow** (requiere `session-manager-plugin`: `brew install --cask session-manager-plugin`):
 
@@ -101,7 +102,7 @@ EventBridge Scheduler secop-nocturno-diario (07:30 America/Bogota)
        3. Glue secop-silver-proveedores  opcional           │ la tabla queda con su versión anterior
        4. Glue secop-silver-contratos    opcional     (E5)  ┘
        5. Glue secop-silver-ganador      OBLIGATORIO  (E6: ganador, estado, sector_entidad, n_proponentes)
-       6. ECS Fargate secop-score:6      OBLIGATORIO  (jobs/score.py, 4 vCPU / 30 GB / 50 GB de disco)
+       6. ECS Fargate secop-score:7      OBLIGATORIO  (jobs/score.py, 4 vCPU / 30 GB / 50 GB de disco)
      2 reintentos por paso con backoff; si un paso obligatorio se agota → estado Falla, sin publicar
   └► si termina en FAILED / TIMED_OUT / ABORTED: regla secop-nocturno-fallo → SNS secop-alertas (correo)
 Alarma secop-api-errores (Errors de la Lambda > 0 en 5 min) → SNS secop-alertas
@@ -112,6 +113,7 @@ Alarma secop-api-errores (Errors de la Lambda > 0 en 5 min) → SNS secop-alerta
 1. **Frescura:** en `secop_control.control_corridas`, `secop-silver-procesos` **y** `secop-silver-ganador` con `estado='exito'` y `cuadre_ok` en la `fecha_corte` (hora de Bogotá), y E6 después de E3. Si no, sale con **código 2 sin publicar**. Se exigen los dos porque E3 reescribe la tabla completa y deja sin llenar lo que completa E6 (`sector_entidad` es una feature del modelo).
 2. **Historia congelada** desde `s3://…/modelos/v1/historia/`, verificada contra `manifest_historia.sha256`.
 3. **Procesos de silver** (Athena, la consulta de la celda 38 del notebook 02 más los campos de la tarjeta) → `limpiar()`. Los procesos que no están en la historia se agregan a la tabla de procesos de `Historia` y `HistoriaRetrieval`.
+   **Familia UNSPSC inferida** (`models:/secop-unspsc@production`) en los procesos abiertos que llegan sin categoría, antes de `recuperar()`. Los procesos inferidos entran a `HistoriaRetrieval` y a `Historia`, así que la familia también genera candidatos. Si el modelo no carga, la noche sigue sin inferir y la alarma `secop-unspsc-sin-modelo` avisa.
 4. **Empresas** (solo personas jurídicas que son usuarios objetivo): con participación en los 12 meses anteriores (calientes) o con contrato firmado en esos 12 meses y sin participación en 24 (frías).
 5. `recuperar()` **por lotes de 10.000 empresas** (calientes y frías en lotes separados) → libera la historia del retrieval → `construir()` / `rankear()` / `armar_listas()` **por lotes de ~1 millón de pares**, con los modelos `models:/secop-*@production` leídos del registro de MLflow directo en PostgreSQL (sin la EC2).
 6. **Motivos** (Paso 5 de la guía, en orden y máximo 3): misma entidad · entidad nueva (lista 2) · ≤ 3 oferentes esperados · precio dentro del rango que suele ganar (\|log\| ≤ 1,4) · similitud con procesos ganados (`knn_max_sim_ganado` ≥ 0,5, umbral provisional que valida ML).
@@ -156,15 +158,20 @@ Todo avisa al tema SNS `secop-alertas` (correo confirmado).
 | El flujo nocturno terminó | Regla EventBridge `secop-nocturno-fallo` sobre la Step Functions | `FAILED`, `TIMED_OUT` o `ABORTED` |
 | La API responde | Alarma `secop-api-errores` | `Errors` de la Lambda > 0 en 5 min |
 | Volumen | `score.py` envía a CloudWatch (namespace `Secop`) `empresas_puntuadas`, `procesos_abiertos`, `largo_medio_lista2`, `duracion_min` y `publicacion` (solo cuando publica) | `secop-procesos-abiertos-bajos`: `procesos_abiertos` < 300 · `secop-sin-publicacion`: ninguna publicación en 26 h (métrica ausente = alarma) |
+| UNSPSC de los abiertos | `score.py` envía `unspsc_real_pct`, `unspsc_inferido_pct` y `unspsc_nulo_pct` (% de los procesos abiertos con UNSPSC real, inferido que pasa el umbral, y nulo) y `unspsc_modelo_cargado` (1/0). Los mismos conteos, el modelo y el umbral quedan en `serving.publicaciones.silver_snapshots` | `secop-unspsc-sin-modelo`: `unspsc_modelo_cargado` < 1 · `secop-unspsc-inferido-bajo`: `unspsc_inferido_pct` < 15,6 % (la mitad del 31,2 % de la primera corrida) |
 | Drift (Paso 8) | Al final de `score.py`, reporte [Evidently](https://github.com/evidentlyai/evidently) 0.7.23 de ~24 mil pares de hoy frente a una muestra fija de 24 mil candidatos del entrenamiento (jul 2024 – jun 2025, `s3://…/monitoreo/drift/referencia_v1.parquet`) en `score_retrieval`, `knn_tasa50`, `knn_tasa5`, `unspsc_familia`, `dias_ult_part_ok` y `comp_entmod_media`. **Criterio fijo por tamaño de efecto**: Wasserstein normalizado > 0,1 en numéricas y PSI > 0,2 en `unspsc_familia`. HTML, `resumen.json` y la muestra de hoy (`muestra_hoy.parquet`) en `s3://…/monitoreo/drift/fecha=<fecha_corte>/`; `drift_features` y `drift_share` en CloudWatch. `python -m jobs.score --regenerar-drift AAAA-MM-DD` rehace el reporte desde esa muestra, sin recalcular las listas | — (se lee; si falla, no tumba la publicación) |
 
 **PSI de las categóricas**: lo calcula `score.py` (`psi_suavizado`), no Evidently. Las categorías con menos del 1 % en las dos muestras se agrupan en `otras`, y las frecuencias 0 se suben a 1e-4 y se renormaliza. El PSI de Evidently reemplaza los ceros sin renormalizar y daba 17,97 donde este da 7,03. El HTML de Evidently queda como apoyo visual, con las raras ya agrupadas.
+
+**Con la imputación** (noche del 2026-11-12, `secop-score:7`): el PSI de `unspsc_familia` baja de **7,03 a 1,95**. En la muestra de pares, `sin_dato` pasa del 99,5 % al 57,6 %; sigue habiendo drift, porque el 68,5 % de los abiertos queda sin familia (no pasa el umbral). `score_retrieval` baja de 0,40 a 0,235 (media 0,088 → 0,143, referencia 0,219). `dias_ult_part_ok` (0,36) y `comp_entmod_media` (0,30) siguen con drift, por las mismas razones de la tabla. `knn_tasa50` y `knn_tasa5` siguen sin drift (0,08).
+
+La tabla siguiente es la lectura del reporte de la noche anterior, **sin imputación**:
 
 Lectura del reporte del 2026-11-12 (`--regenerar-drift`): **4 de 6 features con drift, y las 4 tienen causa conocida.** Medias de la referencia (24 mil candidatos de jul 2024 – jun 2025) frente a hoy (24 mil pares):
 
 | Feature | Medida | Referencia → hoy | Lectura |
 |---|---|---|---|
-| `unspsc_familia` | PSI 7,03 (> 0,2) | `sin_dato`: 8,0 % → 99,5 % | **Drift real de la fuente, no un error de cálculo.** Desde octubre de 2026, datos.gov.co publica `codigo_principal_de_categoria = 'UNSPECIFIED'` en el 99,6 % de los procesos nuevos de las modalidades competitivas (10.588 de 10.626 entre el 15-oct y el 12-nov; en marzo de 2026 era el 8,5 %). La limpieza de silver lo deja nulo y el modelo lo ve como `sin_dato`. El código no viene en ninguna otra columna (`categorias_adicionales` dice "No definido"). Tipo y formato de la categoría coinciden en los dos lados (texto de 4 dígitos). Impacto en el modelo: *pendiente, lo mide ML* |
+| `unspsc_familia` | PSI 7,03 (> 0,2) | `sin_dato`: 8,0 % → 99,5 % | **Drift real de la fuente, no un error de cálculo.** Desde octubre de 2026, datos.gov.co publica `codigo_principal_de_categoria = 'UNSPECIFIED'` en el 99,6 % de los procesos nuevos de las modalidades competitivas (10.588 de 10.626 entre el 15-oct y el 12-nov; en marzo de 2026 era el 8,5 %). La limpieza de silver lo deja nulo y el modelo lo ve como `sin_dato`. El código no viene en ninguna otra columna (`categorias_adicionales` dice "No definido"). Tipo y formato de la categoría coinciden en los dos lados (texto de 4 dígitos). Impacto en el modelo y mitigación: ver [Familia UNSPSC inferida](#familia-unspsc-inferida-secop-unspsc) |
 | `score_retrieval` | Wasserstein 0,40 | media 0,219 → 0,088 (mediana 0,050 → 0,004) | Consecuencia sobre todo de lo anterior: la familia es uno de los componentes de la similitud del M1. Ya en la referencia, los pares sin familia tenían un score medio de 0,137 frente a 0,226 con familia; hoy, 0,087 sin familia (23.883 pares) frente a 0,370 con familia (117). Influye también que hoy se puntúan empresas frías, que el entrenamiento no tenía |
 | `comp_entmod_media` | Wasserstein 0,39 | media 4,40 → 6,52 (mediana 3,39 → 3,81; p90 6,25 → 13,79) | Competencia esperada por entidad y modalidad. La mediana casi no se mueve; lo que cambia es la cola: entre los procesos abiertos de hoy pesan más entidades y modalidades con muchos proponentes |
 | `dias_ult_part_ok` | Wasserstein 0,38 | media 82 → 131 días (mediana 14 → 98) | Esperado: el historial está congelado al 27-oct-2026, así que los días desde la última participación crecen uno por día. Es la señal de que hay que renovar la historia |
@@ -173,7 +180,72 @@ Lectura del reporte del 2026-11-12 (`--regenerar-drift`): **4 de 6 features con 
 
 Las numéricas usan el Wasserstein normalizado de Evidently. Al regenerar, `knn_tasa50` y `comp_entmod_media` se movieron en el tercer decimal frente al reporte de la noche (0,059 → 0,055 y 0,382 → 0,393), sin cambiar la conclusión. `resumen.json` guarda ahora las medias de referencia y de hoy de cada numérica.
 
-Costo: 7 métricas propias ≈ USD 2,10 al mes y 3 alarmas ≈ USD 0,30 al mes.
+Costo: 11 métricas propias ≈ USD 3,30 al mes y 5 alarmas ≈ USD 0,50 al mes.
+
+## Familia UNSPSC inferida (secop-unspsc)
+
+**Decisión** (aprobada por ciencia de datos, David, 2026-11-12, con condiciones): en los procesos abiertos que llegan sin categoría, la familia UNSPSC se infiere a partir de `descripcion_limpia` **solo para el modelo**. Nunca se muestra como dato de SECOP.
+
+**Verificación de la fuente (condición 1):** no es un cambio de columna. El esquema de `p6dx-8zbt` no cambia desde mayo de 2026 (`viewLastModified`): tiene las mismas 59 columnas y la única de categoría es `codigo_principal_de_categoria`, que llega como `'UNSPECIFIED'`. `categorias_adicionales` dice `'No definido'`. La fuente dejó de publicar la categoría: desde octubre de 2026 falta en el 99,6 % de los procesos nuevos de las modalidades competitivas (10.588 de 10.626 entre el 15-oct y el 12-nov), frente al 8,5 % de marzo de 2026.
+
+**Impacto sin mitigar** (experimento [`tests/experimentos/unspsc_faltante.py`](tests/experimentos/unspsc_faltante.py): UNSPSC nulo solo en los procesos del mes, `ml/` de punta a punta). NDCG@10 de la lista 1: −6,9 % en mar-2026 y −8,5 % en oct-2025. Recall@150 del retrieval: −4,6 % y −5,3 %. `unspsc_familia` es la categórica más pesada del G1 (8,6 % de la ganancia) y del ranking v2 (6,9 %), y en el retrieval es una de las dos llaves que generan candidatos.
+
+**Modelo** ([`ml/unspsc.py`](ml/unspsc.py)): TF-IDF de palabras y bigramas (150 mil términos, `min_df=3`) más `SGDClassifier(log_loss)`, sin ensambles ni ajuste fino.
+- `inferir(procesos, modelo, umbral=0.5)` solo llena `unspsc_familia` donde es nula y la clase más probable pasa el umbral.
+- El segmento son los 2 primeros dígitos de la familia inferida, así que siempre son coherentes.
+- Lo que no pasa el umbral queda nulo, como antes.
+- Agrega `unspsc_inferido` (bool) y nunca cambia un UNSPSC real.
+
+**Entrenamiento** ([`jobs/entrenar_unspsc.py`](jobs/entrenar_unspsc.py)): con los procesos con UNSPSC real publicados antes del 2026-10-01 en la historia congelada (570.667 procesos, 409 familias, ~2 min con 4 hilos).
+- Registrado como `secop-unspsc` v1 @production, con el umbral como parámetro, las métricas, `git_commit` y el snapshot de silver como tags.
+- Modelo de 376 MB.
+
+**Evaluación en septiembre de 2026, point-in-time:** el modelo de producción incluye septiembre en su entrenamiento, así que se evalúa un modelo igual entrenado solo con lo publicado antes del 2026-09-01. Sobre 3.562 procesos con UNSPSC real:
+- cobertura con umbral 0,5: **32,9 %**;
+- top-1 de familia entre los cubiertos: **79,2 %**;
+- top-1 de segmento: **83,5 %**;
+- top-1 de familia sin umbral: 50,9 %.
+
+**Resultados de los dos meses** del experimento ([`tests/experimentos/README_unspsc.md`](tests/experimentos/README_unspsc.md), mismo modelo y umbral):
+
+| | mar-2026 | oct-2025 |
+|---|---|---|
+| Top-1 familia / segmento (umbral 0,5) | 78,6 % / 82,8 % | 74,4 % / 80,0 % |
+| Cobertura | 40,7 % | 29,4 % |
+| NDCG@10 lista 1: sin UNSPSC → imputado | 0,4760 → 0,4954 (**55 %** de la pérdida recuperada) | 0,3717 → 0,3896 (**52 %**) |
+| Recall@150 retrieval | 0,7661 → 0,7830 (45 %) | 0,6951 → 0,7135 (48 %) |
+| NDCG@10 por empresa, diferencia pareada (IC 95 %) | +0,0208 [+0,0176, +0,0241] | +0,0193 [+0,0162, +0,0225] |
+
+**En producción:**
+- En `score.py`, antes de `recuperar()`, sobre los procesos abiertos. Los inferidos entran a `HistoriaRetrieval` y a `Historia`, así que la familia y el segmento generan candidatos y no son solo features.
+- Si el modelo no carga, la noche sigue sin inferir: `unspsc_modelo_cargado` = 0 y la alarma `secop-unspsc-sin-modelo` avisa a `secop-alertas`. La tarea de Fargate no tiene `sns:Publish`, así que el aviso va por la alarma.
+- `unspsc_inferido` queda en las listas, en `serving.recomendaciones` (migración idempotente en [`infra/sql/serving.sql`](infra/sql/serving.sql), ya aplicada en RDS) y en `gold.recomendaciones`.
+
+**Primera corrida** (Step Functions completa, 2026-11-12 23:18 → 00:17, 59,5 min):
+- De los 2.752 procesos abiertos: **0,3 % con UNSPSC real** (9), **31,2 % inferido** (858) y **68,5 % nulo** (1.885).
+- 38.850 empresas con listas (35.642 la noche anterior, sin imputar y con 2.089 abiertos: la diferencia mezcla la imputación con los procesos nuevos de la ingesta). 647.786 recomendaciones; el 43 % (281.673) apunta a uno de los 856 procesos con familia inferida.
+- `secop-score`: 26,0 min y **15,4 GB de pico**, igual que antes; la inferencia tarda segundos.
+
+**Lo que ve la web:**
+- `serving.procesos.unspsc_familia` y la tarjeta usan **solo el UNSPSC real** de silver: es nulo si la fuente publicó `'UNSPECIFIED'`.
+- `categoria` sigue nula, porque no hay catálogo de nombres de familias.
+- La API no expone `unspsc_inferido` y su contrato no cambió. Verificado con `CO1.REQ.11356093` (familia inferida): `categoria` y `unspsc_familia` salen nulos, tanto en `/empresas/{key}/recomendaciones` como en `/procesos/{id}`.
+- Ninguno de los cinco motivos cita la categoría. `MOTIVOS_DE_CATEGORIA` en `score.py` excluye los que la citen si `unspsc_inferido`, y hay una prueba que lo verifica.
+
+**Reservas:**
+- Solo cubre un tercio de los abiertos: el 68,5 % sigue sin familia.
+- Entre los cubiertos, ~1 de cada 5 familias es incorrecta (≈ 21 % de error en septiembre).
+- El % de plausibles de la lista 2 baja 0,4–0,9 puntos frente a "sin UNSPSC": es pequeño, pero va en contra.
+- El retrieval recupera menos de la mitad de la pérdida (45–48 %).
+- El clasificador se entrenó con descripciones hasta sep-2026. Si cambia la forma de redactar, la cobertura cae, y eso es lo que vigila `secop-unspsc-inferido-bajo`.
+
+**Impacto en el dashboard por categoría:** el dashboard lee la categoría real de silver o gold, y la imputación no lo toca, a propósito. Desde octubre de 2026, el 99,6 % de los procesos nuevos cae en "sin categoría". Los conteos y montos por familia o segmento de oct-2026 en adelante no son comparables con los meses anteriores, y hay que mostrarlos con esa advertencia, o cortar la serie en septiembre.
+
+**Trabajo futuro:** reentrenar G1, ranking v2 y M1 para el caso que desde oct-2026 es el normal. Hay dos opciones, como propone David:
+- **sin categoría**, quitando `unspsc_familia` y `unspsc_segmento` de las features y de las llaves del retrieval;
+- **con la categoría inferida también en el entrenamiento**, para que el modelo aprenda con el mismo ruido que verá en producción.
+
+Cualquiera de las dos pasa por la compuerta de promoción (`jobs/promover.py`) contra la v1 con imputación.
 
 ## Reentrenamiento y compuerta de promoción (Paso 9)
 
@@ -280,5 +352,6 @@ TEST_DATABASE_URL=postgresql://postgres:prueba@localhost:55432/secop .venv/bin/p
 - [x] GitHub Actions: lint, tests, paridad de `ml/` (rol de solo lectura), build y despliegue (API y job)
 - [x] Reporte de drift diario en S3 (Evidently en `score.py`) y métricas de volumen con alarmas
 - [ ] Reentrenamiento de punta a punta con compuerta de promoción: **la compuerta está hecha y demostrada** (`jobs/promover.py`); faltan los `train_*.py` (el entrenamiento sigue en los notebooks y necesita más de 18 GB)
+- [x] Familia UNSPSC inferida (`secop-unspsc`, cuarto modelo en MLflow) para los abiertos sin categoría, solo para el modelo, con marcado, métricas y alarmas
 - [x] Ingesta de recientes (`jobs/ingesta_recientes.py`) de procesos, proponentes, contratos y proveedores, en paralelo como paso 0 de la Step Functions; si una falla, avisa y la noche sigue
 - [x] Plan B con docker-compose probado en un portátil (volcado de la publicación vigente desde RDS + API local)
