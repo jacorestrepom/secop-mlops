@@ -5,7 +5,8 @@
     python -m jobs.score --verificar-lotes 2026-03-01   # prueba: por lotes y sin naturales == de una vez
 
 Etapas: frescura de silver → historia congelada (s3://…/modelos/v1/historia/, verificada con su manifiesto)
-→ procesos de silver (Athena) por limpiar() → empresas a puntuar → recuperar() por lotes de empresas →
+→ procesos de silver (Athena) por limpiar() → familia UNSPSC inferida en los abiertos que no la traen
+(models:/secop-unspsc@production) → empresas a puntuar → recuperar() por lotes de empresas →
 construir() / rankear() / armar_listas() por lotes de pares → motivos → publicar en RDS (atómico) → copia en
 gold.recomendaciones.
 
@@ -13,6 +14,11 @@ Decisiones de v1 (README):
 - Historial congelado al 27-oct-2026 (base_entrenamiento no se puede regenerar desde silver). Los procesos
   abiertos sí salen frescos de secop_silver.procesos y se agregan a la tabla de procesos de la historia.
 - Procesos abiertos: estado 'abierto', publicados hasta la fecha_corte y con fecha límite posterior.
+- UNSPSC: desde oct-2026 la fuente publica 'UNSPECIFIED' en casi todos los procesos nuevos. Antes de recuperar()
+  se infiere la familia (y su segmento) de los abiertos que no la traen; los procesos inferidos entran a las dos
+  historias, así que la familia también genera candidatos. Lo inferido nunca se publica como dato de SECOP: la
+  tarjeta (serving.procesos) usa solo el UNSPSC real y serving.recomendaciones lleva unspsc_inferido. Si el modelo
+  no carga, la noche sigue sin inferir (métrica unspsc_modelo_cargado = 0 → alarma a secop-alertas).
 - Empresas: SOLO personas jurídicas que son usuarios objetivo: con participación en los 12 meses anteriores
   (calientes) o con contrato firmado en esos 12 meses y sin participación en 24 (frías). Ningún dato de
   personas naturales entra al cálculo ni a serving.
@@ -45,6 +51,7 @@ WORKGROUP = "proyecto-integrador-workgroup"
 TZ = ZoneInfo("America/Bogota")
 JOBS_FRESCURA = ("secop-silver-procesos", "secop-silver-ganador")  # E3 reescribe procesos; E6 lo completa
 MODELOS = {"retrieval": "secop-retrieval", "pgana": "secop-pgana", "ranking": "secop-ranking"}
+MODELO_UNSPSC = "secop-unspsc"  # opcional: si no carga, la noche sigue sin inferir
 HISTORIA_CONGELADA = "2026-10-27"
 SNAPSHOT_HISTORIA = {  # snapshot de silver con el que se armó la historia (tags de los modelos en MLflow)
     "procesos": "5704566866417056960",
@@ -302,8 +309,13 @@ def puntuar_por_lotes(candidatos, h, g1, v2, max_pares, muestra_drift: list | No
 
 
 # ------------------------------------------------------------------------------------------------- 4 · motivos
+# Motivos que se apoyan en la categoría UNSPSC del proceso. Hoy ninguno de los cinco la cita; si se agrega uno,
+# va aquí y no se muestra cuando la categoría fue inferida (nunca se presenta como dato de SECOP).
+MOTIVOS_DE_CATEGORIA: frozenset[str] = frozenset()
+
+
 def motivos(fila) -> list[str]:
-    """Paso 5 de la guía, en este orden, máximo 3."""
+    """Paso 5 de la guía, en este orden, máximo 3. Ninguno cita la categoría si unspsc_inferido."""
     m = []
     if pd.notna(fila.con_misma_entidad) and fila.con_misma_entidad > 0:
         m.append("Ya ha trabajado con esta entidad")
@@ -315,6 +327,8 @@ def motivos(fila) -> list[str]:
         m.append("Valor parecido a contratos que has ganado")
     if pd.notna(fila.knn_max_sim_ganado) and fila.knn_max_sim_ganado >= UMBRAL_SIM_GANADO:
         m.append("Parecido a procesos que has ganado")
+    if bool(getattr(fila, "unspsc_inferido", False)):
+        m = [x for x in m if x not in MOTIVOS_DE_CATEGORIA]
     return m[:MAX_MOTIVOS]
 
 
@@ -343,6 +357,7 @@ def armar_publicacion(
             "score_retrieval": float(r.score_retrieval),
             "oferentes_esperados": _num(r.comp_entmod_media),
             "motivos": r.motivos,
+            "unspsc_inferido": bool(r.unspsc_inferido),
         }
         for r in listas.itertuples(index=False)
     ]
@@ -353,6 +368,8 @@ def armar_publicacion(
             "id_proceso": i,
             "entidad": r.nombre_entidad if pd.notna(r.nombre_entidad) else f"Entidad {r.nit_entidad}",
             "objeto": r.descripcion if pd.notna(r.descripcion) else (r.descripcion_limpia or ""),
+            # Solo el UNSPSC real de silver (procesos_frescos nunca pasa por la inferencia): nulo si la fuente
+            # publicó 'UNSPECIFIED'. No hay catálogo de nombres de familias, por eso categoria va nula.
             "categoria": None,
             "unspsc_familia": None if pd.isna(r.unspsc_familia) else str(r.unspsc_familia),
             "departamento": r.departamento_entidad,
@@ -512,6 +529,9 @@ def drift_del_dia(muestra: pd.DataFrame | None, fecha_corte: str, metricas: bool
     return resumen
 
 
+UNIDADES = {"duracion_min": "None", "unspsc_modelo_cargado": "None"}
+
+
 def publicar_metricas(valores: dict[str, float], cliente=None) -> None:
     """Métricas de volumen en CloudWatch (namespace Secop). Solo se envían cuando hubo publicación: una noche
     sin publicar deja la métrica vacía y la alarma secop-sin-publicacion lo detecta."""
@@ -520,7 +540,7 @@ def publicar_metricas(valores: dict[str, float], cliente=None) -> None:
 
         cliente = boto3.client("cloudwatch")
     datos = [
-        {"MetricName": k, "Value": float(v), "Unit": "Count" if k != "duracion_min" else "None"}
+        {"MetricName": k, "Value": float(v), "Unit": UNIDADES.get(k, "Percent" if k.endswith("_pct") else "Count")}
         for k, v in valores.items()
     ]
     cliente.put_metric_data(Namespace=NAMESPACE, MetricData=datos)
@@ -547,6 +567,7 @@ def copia_gold(listas: pd.DataFrame, fecha_corte: str, version_id: int) -> None:
             "score_retrieval",
             "oferentes_esperados",
             "motivos",
+            "unspsc_inferido",
         ]
     ].copy()
     d["motivos"] = d.motivos.map(lambda m: json.dumps(m, ensure_ascii=False))
@@ -591,6 +612,47 @@ def cargar_modelos() -> tuple[dict, dict]:
         boosters[corto] = mlflow.lightgbm.load_model(f"models:/{nombre}@production")
         versiones[corto] = f"{nombre} v{v.version}"
     return boosters, versiones
+
+
+def cargar_unspsc() -> tuple[object, str, float]:
+    """(modelo, versión, umbral) de models:/secop-unspsc@production. El umbral es un parámetro del run."""
+    import mlflow
+    from mlflow import MlflowClient
+
+    conectar_mlflow()
+    c = MlflowClient()
+    v = c.get_model_version_by_alias(MODELO_UNSPSC, "production")
+    umbral = float(c.get_run(v.run_id).data.params["umbral"])
+    return mlflow.sklearn.load_model(f"models:/{MODELO_UNSPSC}@production"), f"{MODELO_UNSPSC} v{v.version}", umbral
+
+
+def inferir_abiertos(procesos: pd.DataFrame, ids_abiertos, modelo, umbral: float) -> tuple[pd.DataFrame, dict]:
+    """Infiere la familia UNSPSC SOLO en los procesos abiertos que no la traen, dentro de la tabla que reciben las
+    historias. Devuelve (procesos, conteos). Con ``modelo=None`` no infiere (y lo cuenta todo como real o nulo)."""
+    from ml.unspsc import inferir
+
+    es_abierto = procesos.id_proceso.isin(set(ids_abiertos)).to_numpy()
+    ab = procesos[es_abierto]
+    real = int(ab.unspsc_familia.notna().sum())
+    procesos = procesos.assign(unspsc_inferido=False)
+    if modelo is not None:
+        inf = inferir(ab, modelo, umbral)
+        for c in ("unspsc_familia", "unspsc_segmento"):
+            procesos[c] = procesos[c].astype("string")
+            procesos.loc[inf.index, c] = inf[c]
+        procesos.loc[inf.index, "unspsc_inferido"] = inf.unspsc_inferido
+    inferido = int(procesos.loc[es_abierto, "unspsc_inferido"].sum())
+    n = max(len(ab), 1)
+    conteos = {
+        "abiertos": len(ab),
+        "real": real,
+        "inferido": inferido,
+        "nulo": len(ab) - real - inferido,
+        "unspsc_real_pct": 100 * real / n,
+        "unspsc_inferido_pct": 100 * inferido / n,
+        "unspsc_nulo_pct": 100 * (len(ab) - real - inferido) / n,
+    }
+    return procesos, conteos
 
 
 # ------------------------------------------------------------------------------------------------------ tuberías
@@ -670,6 +732,20 @@ def correr(a) -> int:
         f"ABIERTOS a la fecha_corte: {len(abiertos):,}"
     )
 
+    with etapa("familia UNSPSC inferida en los abiertos sin categoría (secop-unspsc)"):
+        try:
+            mod_unspsc, version_unspsc, umbral_unspsc = cargar_unspsc()
+        except Exception as e:  # nunca tumba la noche: sigue sin inferir y la alarma avisa
+            mod_unspsc, version_unspsc, umbral_unspsc = None, None, None
+            log(f"   AVISO: no cargó {MODELO_UNSPSC} ({type(e).__name__}: {e}); la noche sigue SIN inferir")
+        procesos, unspsc = inferir_abiertos(procesos, abiertos.id_proceso, mod_unspsc, umbral_unspsc)
+        inferidos = set(procesos.loc[procesos.unspsc_inferido, "id_proceso"])
+    log(
+        f"   UNSPSC de los {unspsc['abiertos']:,} abiertos ({version_unspsc or 'sin modelo'}, umbral {umbral_unspsc}): "
+        f"real {unspsc['real']:,} ({unspsc['unspsc_real_pct']:.1f} %) · inferido {unspsc['inferido']:,} "
+        f"({unspsc['unspsc_inferido_pct']:.1f} %) · nulo {unspsc['nulo']:,} ({unspsc['unspsc_nulo_pct']:.1f} %)"
+    )
+
     calientes, frias = empresas_a_puntuar(
         tablas["proveedores"], tablas["proponentes"], tablas["contratos"], fecha_corte
     )
@@ -695,6 +771,7 @@ def correr(a) -> int:
         a.max_pares,
         muestra_drift,
     )
+    listas["unspsc_inferido"] = listas.id_proceso.isin(inferidos)
     listas["motivos"] = [motivos(r) for r in listas.itertuples(index=False)]
     huella = sha256_listas(listas)
     l2 = listas[listas.lista == "oportunidad"].groupby("proveedor_key").size()
@@ -713,6 +790,9 @@ def correr(a) -> int:
                 "historia_s3": f"s3://{BUCKET}/{HISTORIA_S3}",
                 **{f"historia_snapshot_{k}": v for k, v in SNAPSHOT_HISTORIA.items()},
                 "sha256_listas": huella,
+                "unspsc_modelo": version_unspsc,
+                "unspsc_umbral": umbral_unspsc,
+                **{f"unspsc_{k}" if not k.startswith("unspsc_") else k: v for k, v in unspsc.items()},
             }
             metricas = json.loads((Path(__file__).parent / "metricas_v1.json").read_text(encoding="utf-8"))
             pub = armar_publicacion(
@@ -745,6 +825,10 @@ def correr(a) -> int:
                     "largo_medio_lista2": lista2_media,
                     "duracion_min": (time.time() - T0) / 60,
                     "publicacion": 1,
+                    "unspsc_modelo_cargado": int(mod_unspsc is not None),
+                    "unspsc_real_pct": unspsc["unspsc_real_pct"],
+                    "unspsc_inferido_pct": unspsc["unspsc_inferido_pct"],
+                    "unspsc_nulo_pct": unspsc["unspsc_nulo_pct"],
                 }
             )
     try:  # también con --sin-publicar (sin métricas en CloudWatch): el reporte es solo de monitoreo
@@ -755,6 +839,8 @@ def correr(a) -> int:
         log(f"   ERROR en el reporte de drift (las listas no dependen de él): {type(e).__name__}: {e}")
     log(
         f"RESUMEN fecha_corte={fecha_corte} empresas={n_emp:,} procesos_abiertos={len(abiertos):,} "
+        f"unspsc_real={unspsc['unspsc_real_pct']:.1f}% inferido={unspsc['unspsc_inferido_pct']:.1f}% "
+        f"nulo={unspsc['unspsc_nulo_pct']:.1f}% "
         f"lista2_media={lista2_media:.2f} "
         f"duracion={(time.time() - T0) / 60:.1f} min pico={pico_gb():.1f} GB sha256={huella[:16]}"
     )

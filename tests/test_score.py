@@ -135,6 +135,7 @@ def test_publicacion_sin_personas_naturales(pg_dsn):
             "score_retrieval": [0.9, 0.5],
             "comp_entmod_media": [2.0, 5.0],
             "motivos": [["Suele tener pocos competidores"], []],
+            "unspsc_inferido": [False, True],  # P2 llegó 'UNSPECIFIED' y su familia se infirió para el modelo
         }
     )
     frescos = pd.DataFrame(
@@ -178,7 +179,17 @@ def test_publicacion_sin_personas_naturales(pg_dsn):
     assert [e["proveedor_key"] for e in pub.empresas] == ["j1"]
     assert {p["entidad"] for p in pub.procesos} == {"Alcaldía X", "Entidad 2"}
     assert not pub.datos_simulados
-    assert publicar(pg_dsn, pub) > 0
+    # La tarjeta usa solo el UNSPSC real: P2 sale sin categoría aunque el modelo haya usado una inferida
+    tarjeta = {p["id_proceso"]: p for p in pub.procesos}
+    assert tarjeta["P1"]["unspsc_familia"] == "5612" and tarjeta["P2"]["unspsc_familia"] is None
+    assert all(p["categoria"] is None for p in pub.procesos)
+    v = publicar(pg_dsn, pub)
+    assert v > 0
+    import psycopg2
+
+    with psycopg2.connect(pg_dsn) as con, con.cursor() as cur:
+        cur.execute("SELECT id_proceso, unspsc_inferido FROM serving.recomendaciones WHERE version_id = %s", (v,))
+        assert dict(cur.fetchall()) == {"P1": False, "P2": True}
 
 
 def test_metricas_de_volumen_en_cloudwatch():

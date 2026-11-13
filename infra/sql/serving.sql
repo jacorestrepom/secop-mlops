@@ -74,6 +74,10 @@ CREATE TABLE IF NOT EXISTS serving.recomendaciones (
     FOREIGN KEY (version_id, id_proceso) REFERENCES serving.procesos (version_id, id_proceso) ON DELETE CASCADE
 );
 
+-- Migración (2026-11-12): la familia UNSPSC del proceso fue inferida por secop-unspsc (la fuente publicó
+-- 'UNSPECIFIED'). Solo marca: la categoría inferida nunca se publica en serving.procesos ni la ve la web.
+ALTER TABLE serving.recomendaciones ADD COLUMN IF NOT EXISTS unspsc_inferido boolean NOT NULL DEFAULT false;
+
 -- Agregados del dashboard (GET /estadisticas/{indicador})
 CREATE TABLE IF NOT EXISTS serving.estadisticas (
     version_id  bigint NOT NULL REFERENCES serving.publicaciones ON DELETE CASCADE,

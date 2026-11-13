@@ -35,7 +35,7 @@ COLUMNAS = {
     ],
     "recomendaciones": [
         "proveedor_key", "lista", "posicion", "id_proceso", "probabilidad", "score_ranking", "score_retrieval",
-        "oferentes_esperados", "motivos",
+        "oferentes_esperados", "motivos", "unspsc_inferido",
     ],
     "estadisticas": ["indicador", "descripcion", "unidad", "datos"],
 }  # fmt: skip
@@ -79,9 +79,13 @@ def _csv(filas: list[dict], columnas: list[str]) -> io.StringIO:
     return buf
 
 
+# Valores por defecto de columnas agregadas después (las publicaciones de demo no las traen)
+DEFECTOS = {"recomendaciones": {"unspsc_inferido": False}}
+
+
 def _copiar(cur, tabla: str, version_id: int, filas: list[dict]) -> None:
     cols = ["version_id"] + COLUMNAS[tabla]
-    datos = [{"version_id": version_id, **f} for f in filas]
+    datos = [{"version_id": version_id, **DEFECTOS.get(tabla, {}), **f} for f in filas]
     cur.copy_expert(f"COPY serving.{tabla} ({', '.join(cols)}) FROM STDIN WITH (FORMAT csv)", _csv(datos, cols))
 
 
