@@ -6,10 +6,12 @@ Servicio del recomendador SECOP: cada noche calcula las dos listas de cada empre
 api/     FastAPI: rutas, esquemas Pydantic (contrato con la web) y orígenes de datos (simulada / rds)
 jobs/    score.py (job nocturno + métricas + drift), ingesta_recientes.py, entrenar_unspsc.py, publicar.py, registrar_v1.py, promover.py (compuerta), referencia.py
 ml/      paquete del modelo: features, retrieval, ranking, listas (PR de ML)
-infra/   sql/serving.sql, jobs.Dockerfile (imagen secop-jobs), stepfunctions/secop-nocturno.asl.json, docker-compose (plan B)
+infra/   sql/serving.sql y volver_version_anterior.sql, jobs.Dockerfile (imagen secop-jobs), stepfunctions/secop-nocturno.asl.json, docker-compose (plan B)
 tests/   API (simulada y RDS), publicación atómica y paridad del modelo
 .github/ CI: lint, pruebas y despliegue de la API
 ```
+
+**Operar el sistema** (alertas, comandos, volver a la versión anterior, apagado y qué es normal): [OPERACION.md](OPERACION.md).
 
 ## Correr la API en local
 
