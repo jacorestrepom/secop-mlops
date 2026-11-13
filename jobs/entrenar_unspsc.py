@@ -30,6 +30,7 @@ from ml.unspsc import MAX_TERMINOS, UMBRAL, entrenar, evaluar
 
 NOMBRE = "secop-unspsc"
 EXPERIMENTO = "secop-unspsc"
+ARTEFACTOS = f"s3://{BUCKET}/mlflow/{EXPERIMENTO}"
 CORTE = "2026-10-01"  # entrenamiento del modelo de producción: publicados antes de esta fecha
 MES_EVAL = ("2026-09-01", "2026-10-01")
 COLS = ["id_proceso", "fecha_publicacion", "descripcion_limpia", "unspsc_segmento", "unspsc_familia"]
@@ -97,7 +98,13 @@ def main(argv=None) -> int:
     import mlflow
     from mlflow import MlflowClient
 
-    mlflow.set_experiment(EXPERIMENTO)
+    # Con el registro leído directo de PostgreSQL, un experimento nuevo tomaría ./mlruns (local) como carpeta de
+    # artefactos y Fargate no podría cargar el modelo: se crea con su carpeta en S3, como secop-registro-v1.
+    if mlflow.get_experiment_by_name(EXPERIMENTO) is None:
+        mlflow.create_experiment(EXPERIMENTO, artifact_location=ARTEFACTOS)
+    exp = mlflow.set_experiment(EXPERIMENTO)
+    if not exp.artifact_location.startswith("s3://"):
+        raise RuntimeError(f"el experimento {EXPERIMENTO} guarda artefactos en {exp.artifact_location}, no en S3")
     commit = commit_git()
     with mlflow.start_run(run_name=f"{NOMBRE}-{CORTE}") as run:
         mlflow.log_params(
